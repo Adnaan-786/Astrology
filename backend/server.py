@@ -1486,6 +1486,40 @@ async def apply_astrologer(payload: Dict[str, Any]):
                       "pan_number", "pan_card_url", "profile_photo_url"]:
         if not docs.get(must_have):
             raise HTTPException(status_code=400, detail=f"Missing document: {must_have}")
+
+    # Duplicate-application guard: one email / phone / aadhaar / pan can apply only once
+    # (unless the previous one was rejected — they may re-apply).
+    email_lc = (payload.get("email") or "").strip().lower()
+    phone_norm = "".join(ch for ch in (payload.get("phone") or "") if ch.isdigit())[-10:]
+    aadhaar_norm = "".join(ch for ch in (docs.get("aadhaar_number") or "") if ch.isdigit())
+    pan_norm = (docs.get("pan_number") or "").strip().upper()
+
+    dup_or = []
+    if email_lc:
+        dup_or.append({"email": {"$regex": f"^{email_lc}$", "$options": "i"}})
+    if phone_norm:
+        dup_or.append({"phone": {"$regex": f"{phone_norm}$"}})
+    if aadhaar_norm:
+        dup_or.append({"documents.aadhaar_number": {"$regex": f"{aadhaar_norm}$"}})
+    if pan_norm:
+        dup_or.append({"documents.pan_number": pan_norm})
+
+    if dup_or:
+        existing = await db.astrologer_applications.find_one(
+            {"$or": dup_or, "status": {"$in": ["pending", "approved"]}},
+            {"_id": 0, "id": 1, "status": 1, "email": 1, "phone": 1},
+        )
+        if existing:
+            status_word = "already approved" if existing.get("status") == "approved" else "already pending review"
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"An application with this email / phone / Aadhaar / PAN is {status_word}. "
+                    f"Reference: #{existing.get('id')}. You can re-apply only if your previous "
+                    "application is rejected."
+                ),
+            )
+
     app_doc = AstrologerApplication(**payload).model_dump()
     await db.astrologer_applications.insert_one(app_doc)
     await log_audit("apply", "astrologer_application", app_doc["id"], app_doc.get("full_name", ""))

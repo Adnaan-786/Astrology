@@ -367,15 +367,17 @@ function ApplicationDetailDialog({ application, onClose, onUpdated }) {
             <h4 className="font-semibold text-white mb-4 flex items-center gap-2">
               <Award className="w-4 h-4 text-purple-300" /> Documents
             </h4>
-            <div className="grid sm:grid-cols-2 gap-3 text-sm">
+            <div className="grid sm:grid-cols-2 gap-3 text-sm mb-4">
               <DocLine label="Aadhaar Number" value={masked(docs.aadhaar_number)} />
               <DocLine label="PAN Number" value={docs.pan_number || "-"} />
-              <DocLink label="Aadhaar Front" url={docs.aadhaar_front_url} testId="doc-aadhaar-front" />
-              <DocLink label="Aadhaar Back" url={docs.aadhaar_back_url} testId="doc-aadhaar-back" />
-              <DocLink label="PAN Card" url={docs.pan_card_url} testId="doc-pan" />
-              <DocLink label="Profile Photo" url={docs.profile_photo_url} testId="doc-photo" />
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <DocPreview label="Profile Photo" url={docs.profile_photo_url} testId="doc-photo" />
+              <DocPreview label="Aadhaar Front" url={docs.aadhaar_front_url} testId="doc-aadhaar-front" />
+              <DocPreview label="Aadhaar Back" url={docs.aadhaar_back_url} testId="doc-aadhaar-back" />
+              <DocPreview label="PAN Card" url={docs.pan_card_url} testId="doc-pan" />
               {docs.certificate_url && (
-                <DocLink label="Certificate" url={docs.certificate_url} testId="doc-cert" />
+                <DocPreview label="Astrology Certificate" url={docs.certificate_url} testId="doc-cert" />
               )}
             </div>
           </div>
@@ -519,6 +521,75 @@ const DocLink = ({ label, url, testId }) => {
       >
         View <ExternalLink className="w-3 h-3" />
       </a>
+    </div>
+  );
+};
+
+// Inline preview card: shows the actual image / PDF preview to the admin.
+// Handles PNG / JPEG / PDF base64 payloads as well as plain http(s) URLs.
+const DocPreview = ({ label, url, testId }) => {
+  if (!url) {
+    return (
+      <div className="bg-slate-900 rounded-lg border border-slate-800 p-3">
+        <p className="text-xs text-slate-400 mb-2">{label}</p>
+        <div className="h-40 flex items-center justify-center text-slate-600 text-xs italic border border-dashed border-slate-700 rounded">
+          Not provided
+        </div>
+      </div>
+    );
+  }
+  const isPdf = (url || "").startsWith("data:application/pdf") || (url || "").toLowerCase().endsWith(".pdf");
+  const openInNewTab = () => {
+    try {
+      const win = window.open();
+      if (!win) return;
+      if (isPdf) {
+        win.document.write(`<iframe src="${url}" style="border:0;width:100%;height:100vh"></iframe>`);
+      } else {
+        win.document.write(
+          `<body style="margin:0;background:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${url}" style="max-width:100%;max-height:100vh"/></body>`
+        );
+      }
+    } catch (e) {
+      window.open(url, "_blank");
+    }
+  };
+  return (
+    <div className="bg-slate-900 rounded-lg border border-slate-800 p-3" data-testid={testId}>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs text-slate-300 font-medium">{label}</p>
+        <button
+          onClick={openInNewTab}
+          className="text-purple-300 hover:underline text-xs inline-flex items-center gap-1"
+          data-testid={`${testId}-open`}
+        >
+          Open <ExternalLink className="w-3 h-3" />
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={openInNewTab}
+        className="block w-full h-44 rounded overflow-hidden bg-slate-950 border border-slate-800 hover:border-purple-500 transition-colors"
+        title={`Click to open ${label} full size`}
+      >
+        {isPdf ? (
+          <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 gap-2">
+            <FileText className="w-10 h-10 text-purple-300" />
+            <span className="text-xs">PDF document — click to open</span>
+          </div>
+        ) : (
+          <img
+            src={url}
+            alt={label}
+            className="w-full h-full object-contain bg-slate-950"
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+              e.currentTarget.parentElement.innerHTML =
+                '<div class="w-full h-full flex items-center justify-center text-slate-500 text-xs">Preview not available — click Open</div>';
+            }}
+          />
+        )}
+      </button>
     </div>
   );
 };
