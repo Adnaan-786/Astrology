@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Star, Zap, Bot, Calendar, ShoppingBag,
   Package, FileText, Crown, Percent, Wallet, Image, Bell, MessageSquare,
   HeadphonesIcon, Settings, List, LogOut, Menu, X, ChevronDown,
-  Moon, Sun, Shield, Lock
+  Moon, Sun, Shield, Lock, Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,7 @@ const menuItems = [
   { icon: FileText, label: "Astrologer Applications", path: "/admin/astrologer-applications", badgeKey: "applications" },
   { icon: Zap, label: "Live Sessions", path: "/admin/sessions" },
   { icon: Bot, label: "AI Reports", path: "/admin/ai-reports" },
+  { icon: Sparkles, label: "AI Report Plans", path: "/admin/report-types" },
   { icon: Calendar, label: "Daily Horoscope", path: "/admin/horoscope" },
   { icon: ShoppingBag, label: "Store & Products", path: "/admin/store" },
   { icon: Package, label: "Orders", path: "/admin/orders" },

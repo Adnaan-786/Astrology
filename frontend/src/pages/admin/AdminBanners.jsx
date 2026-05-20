@@ -155,12 +155,15 @@ const AdminBanners = () => {
                 <Select value={form.page} onValueChange={(v) => setForm(p => ({ ...p, page: v }))}>
                   <SelectTrigger className="bg-slate-800 border-slate-700"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-slate-900 border-slate-700">
-                    <SelectItem value="home">Home</SelectItem>
-                    <SelectItem value="store">Store</SelectItem>
-                    <SelectItem value="astrologers">Astrologers</SelectItem>
-                    <SelectItem value="plans">Plans</SelectItem>
+                    <SelectItem value="home">Home — top carousel</SelectItem>
+                    <SelectItem value="store">Cosmic Store — page header</SelectItem>
+                    <SelectItem value="astrologers">Astrologers — page header</SelectItem>
+                    <SelectItem value="plans">Plans — page header</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Banner only shows on the selected public page.
+                </p>
               </div>
             </div>
             <label className="flex items-center gap-2 cursor-pointer">

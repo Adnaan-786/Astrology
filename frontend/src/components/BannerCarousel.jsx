@@ -14,7 +14,7 @@ const DEFAULT_BANNER = {
   bg_color: "linear-gradient(135deg, #2D1B69 0%, #8B5CF6 50%, #D4A017 100%)",
 };
 
-const BannerCarousel = () => {
+const BannerCarousel = ({ page = "home", showDefault = true }) => {
   const [banners, setBanners] = useState([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -22,17 +22,19 @@ const BannerCarousel = () => {
   useEffect(() => {
     const fetchBanners = async () => {
       try {
-        const res = await axios.get(`${API}/banners`);
-        const list = Array.isArray(res.data) && res.data.length > 0 ? res.data : [DEFAULT_BANNER];
+        const res = await axios.get(`${API}/banners`, { params: { page } });
+        const list = Array.isArray(res.data) && res.data.length > 0
+          ? res.data
+          : (showDefault && page === "home" ? [DEFAULT_BANNER] : []);
         setBanners(list);
       } catch (e) {
-        setBanners([DEFAULT_BANNER]);
+        setBanners(showDefault && page === "home" ? [DEFAULT_BANNER] : []);
       } finally {
         setLoading(false);
       }
     };
     fetchBanners();
-  }, []);
+  }, [page, showDefault]);
 
   useEffect(() => {
     if (banners.length <= 1) return;
@@ -51,6 +53,8 @@ const BannerCarousel = () => {
       </section>
     );
   }
+
+  if (!banners.length) return null;
 
   const prev = () => setActiveIdx((i) => (i - 1 + banners.length) % banners.length);
   const next = () => setActiveIdx((i) => (i + 1) % banners.length);

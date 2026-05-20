@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
+import BannerCarousel from "@/components/BannerCarousel";
 import {
   Select,
   SelectContent,
@@ -181,6 +182,7 @@ const AstrologersPage = () => {
 
   return (
     <div className="min-h-screen pt-20 lg:pt-24 pb-24 lg:pb-12" data-testid="astrologers-page">
+      <BannerCarousel page="astrologers" showDefault={false} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">

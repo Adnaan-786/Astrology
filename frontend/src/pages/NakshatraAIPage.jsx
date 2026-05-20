@@ -34,8 +34,13 @@ const getUserPlan = () => (getUser()?.plan || "free").toLowerCase();
 const isLoggedIn = () => !!getUser();
 const isPaid = () => ["silver", "gold", "platinum"].includes(getUserPlan());
 
-// ----- Report catalogue -----
-const REPORT_TYPES = [
+// ----- Report catalogue (fallback when API unavailable) -----
+const ICON_MAP = {
+  Scroll, Gem, FileDown, Heart, Briefcase, HeartPulse,
+  Wallet, Home: HomeIcon, Calendar, Orbit, Baby, Sparkles,
+};
+
+const FALLBACK_REPORT_TYPES = [
   { id: "kundli-basic",     name: "Janam Kundli Basic",   desc: "Quick overview of your chart",        price: 0,   Icon: Scroll,      color: "#F5C842", free: true },
   { id: "kundli-detailed",  name: "Janam Kundli Detailed",desc: "Full 10-section deep analysis",       price: 99,  Icon: Gem,         color: "#3FB0FF" },
   { id: "kundli-premium",   name: "Premium PDF Report",   desc: "14-section extensive forecast",       price: 299, Icon: FileDown,    color: "#E879F9" },
@@ -48,6 +53,37 @@ const REPORT_TYPES = [
   { id: "sade-sati",        name: "Sade Sati Analysis",   desc: "7.5 yr Shani period deep dive",       price: 149, Icon: Orbit,       color: "#6366F1" },
   { id: "child-birth",      name: "Child Birth Report",   desc: "Progeny & parenting guidance",        price: 199, Icon: Baby,        color: "#F472B6" },
 ];
+
+// Hook: returns report types from backend (admin-managed). Falls back to
+// the static list above if the API is unreachable. Keeps the rest of the
+// page working without any prop drilling.
+const useReportTypes = () => {
+  const [types, setTypes] = useState(FALLBACK_REPORT_TYPES);
+  useEffect(() => {
+    let mounted = true;
+    axios.get(`${API}/report-types`)
+      .then((res) => {
+        if (!mounted || !Array.isArray(res.data) || res.data.length === 0) return;
+        const mapped = res.data.map((rt) => ({
+          id: rt.slug,
+          name: rt.name,
+          desc: rt.desc || "",
+          price: Number(rt.price) || 0,
+          Icon: ICON_MAP[rt.icon] || Scroll,
+          color: rt.color || "#8B5CF6",
+          free: !!rt.free || Number(rt.price) === 0,
+          needsPartner: !!rt.needs_partner,
+        }));
+        setTypes(mapped);
+      })
+      .catch(() => { /* keep fallback */ });
+    return () => { mounted = false; };
+  }, []);
+  return types;
+};
+
+// Static alias kept for any legacy references; new code MUST use useReportTypes().
+const REPORT_TYPES = FALLBACK_REPORT_TYPES;
 
 // ----- Sample conversation (for lock preview) -----
 const SAMPLE_CONVO = [
@@ -311,6 +347,7 @@ const LOADING_MESSAGES = [
 const ReportFlow = () => {
   const [step, setStep] = useState(1); // 1: select, 2: form, 3: loading, 4: display
   const [selectedType, setSelectedType] = useState(null);
+  const reportTypes = useReportTypes();
   const [form, setForm] = useState({
     birthName: "", dob: "", tob: "", pob: "",
     partnerName: "", partnerDob: "",
@@ -461,7 +498,7 @@ const ReportFlow = () => {
           <p className="text-zinc-400">Choose a report. Get a detailed, personalised analysis in seconds.</p>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {REPORT_TYPES.map((r) => (
+          {reportTypes.map((r) => (
             <button
               key={r.id}
               onClick={() => pickType(r)}
@@ -679,7 +716,8 @@ const SideLockCard = ({ onUpgrade }) => {
 
 // ==================== REPORT GRID (compact grid for side-lock layout) ====================
 const ReportGrid = ({ onPick }) => {
-  const items = REPORT_TYPES.slice(0, 6);
+  const reportTypes = useReportTypes();
+  const items = reportTypes.slice(0, 6);
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" data-testid="report-grid">
       {items.map((r) => (
@@ -928,6 +966,7 @@ const NakshatraAIPage = () => {
   const [upsellOpen, setUpsellOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("chat");
   const paid = isPaid();
+  const reportTypes = useReportTypes();
 
   return (
     <div className="min-h-screen pt-20 lg:pt-24 pb-24 lg:pb-12 av-bg" data-testid="nakshatra-ai-page">
@@ -986,7 +1025,7 @@ const NakshatraAIPage = () => {
                     <p className="text-sm text-zinc-400">with data-rich, AI-generated analysis.</p>
                   </div>
                   <Badge className="bg-[#D4A017]/15 text-[#F5C842] border border-[#D4A017]/40 px-3 py-1.5 hidden sm:inline-flex">
-                    {REPORT_TYPES.length} Reports Available
+                    {reportTypes.length} Reports Available
                   </Badge>
                 </div>
                 <ReportGrid onPick={() => setActiveTab("reports")} />

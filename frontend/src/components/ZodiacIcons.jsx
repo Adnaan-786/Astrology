@@ -1,25 +1,25 @@
 import React from "react";
 
-/* Colourful Vedic zodiac (Rashi) icons taken from the traditional
-   12-sign poster (ram, bull, twins, crab, lion, maiden, scales,
-   scorpion, archer, sea-goat, water-bearer, fish). Each icon is a
-   PNG with a transparent background that carries its signature colour.
-   Used by: /rashifal page, NakshatraAI Kundli chart, etc.
+/*
+  Zodiac (Rashi) icons — clean Unicode-symbol icons rendered inside a
+  coloured gradient circle. Replaces the older cropped PNG poster slices
+  that looked half-cut on the page. Always renders crisp at any size and
+  centres the symbol perfectly.
 */
 
 export const ZODIAC_COLORS = [
-  "#C5C44E", // 1 Aries — yellow-green
-  "#C8202C", // 2 Taurus — red
-  "#3F77AE", // 3 Gemini — blue
-  "#8B3326", // 4 Cancer — brown-red
-  "#E26430", // 5 Leo — orange
-  "#B83695", // 6 Virgo — magenta
-  "#34427D", // 7 Libra — deep blue
-  "#2D2A6E", // 8 Scorpio — dark navy
-  "#3D5A3A", // 9 Sagittarius — olive green
-  "#3A573A", // 10 Capricorn — forest green
-  "#2A4286", // 11 Aquarius — royal blue
-  "#2A5C66", // 12 Pisces — teal
+  "#F97316", // 1 Aries — vivid orange (fire)
+  "#10B981", // 2 Taurus — emerald (earth)
+  "#3B82F6", // 3 Gemini — blue (air)
+  "#A78BFA", // 4 Cancer — soft violet (water)
+  "#EAB308", // 5 Leo — gold (fire)
+  "#22C55E", // 6 Virgo — green (earth)
+  "#06B6D4", // 7 Libra — cyan (air)
+  "#DC2626", // 8 Scorpio — red (water/intense)
+  "#F59E0B", // 9 Sagittarius — amber (fire)
+  "#0EA5E9", // 10 Capricorn — sky (earth)
+  "#8B5CF6", // 11 Aquarius — violet (air)
+  "#14B8A6", // 12 Pisces — teal (water)
 ];
 
 export const ZODIAC_NAMES = [
@@ -27,22 +27,57 @@ export const ZODIAC_NAMES = [
   "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
 ];
 
-const ZODIAC_FILES = [
-  "aries", "taurus", "gemini", "cancer", "leo", "virgo",
-  "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces",
+export const ZODIAC_SYMBOLS = [
+  "\u2648", // ♈ Aries
+  "\u2649", // ♉ Taurus
+  "\u264A", // ♊ Gemini
+  "\u264B", // ♋ Cancer
+  "\u264C", // ♌ Leo
+  "\u264D", // ♍ Virgo
+  "\u264E", // ♎ Libra
+  "\u264F", // ♏ Scorpio
+  "\u2650", // ♐ Sagittarius
+  "\u2651", // ♑ Capricorn
+  "\u2652", // ♒ Aquarius
+  "\u2653", // ♓ Pisces
 ];
 
 const BaseIcon = ({ idx, size = 80, className = "" }) => {
-  const name = ZODIAC_FILES[idx];
+  const i = Math.max(0, Math.min(11, idx));
+  const color = ZODIAC_COLORS[i];
+  const symbol = ZODIAC_SYMBOLS[i];
+  const fontPx = Math.round(size * 0.58);
   return (
-    <img
-      src={`/zodiac/${name}.png`}
-      alt={ZODIAC_NAMES[idx]}
-      width={size}
-      height={size}
-      className={className}
-      style={{ objectFit: "contain", width: size, height: size }}
-    />
+    <span
+      role="img"
+      aria-label={ZODIAC_NAMES[i]}
+      className={`relative inline-flex items-center justify-center select-none ${className}`}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "9999px",
+        background: `radial-gradient(circle at 30% 30%, ${color}33, ${color}10 70%, transparent)`,
+        border: `1.5px solid ${color}55`,
+        boxShadow: `0 4px 18px -8px ${color}88, inset 0 0 14px ${color}22`,
+        lineHeight: 1,
+      }}
+    >
+      <span
+        style={{
+          fontSize: fontPx,
+          color: color,
+          fontWeight: 600,
+          textShadow: `0 0 12px ${color}66`,
+          lineHeight: 1,
+          // Keep the glyph from looking clipped on any browser:
+          paddingBottom: Math.max(2, Math.round(size * 0.03)),
+          fontFamily:
+            '"Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols2", "Symbola", sans-serif',
+        }}
+      >
+        {symbol}
+      </span>
+    </span>
   );
 };
 

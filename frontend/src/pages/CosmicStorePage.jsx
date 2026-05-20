@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import BannerCarousel from "@/components/BannerCarousel";
 import {
   Dialog,
   DialogContent,
@@ -92,6 +93,7 @@ const CosmicStorePage = () => {
 
   return (
     <div className="min-h-screen pt-20 lg:pt-24 pb-24 lg:pb-12" data-testid="cosmic-store-page">
+      <BannerCarousel page="store" showDefault={false} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">

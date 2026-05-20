@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import BannerCarousel from "@/components/BannerCarousel";
 
 const PlansPage = () => {
   const [plans, setPlans] = useState([]);
@@ -52,6 +53,7 @@ const PlansPage = () => {
 
   return (
     <div className="min-h-screen pt-20 lg:pt-24 pb-24 lg:pb-12" data-testid="plans-page">
+      <BannerCarousel page="plans" showDefault={false} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-12">

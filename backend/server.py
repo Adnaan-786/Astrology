@@ -257,12 +257,23 @@ async def get_product(product_id: str):
 
 @api_router.get("/horoscopes/today")
 async def get_today_horoscopes():
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    return await db.horoscopes.find({"date": today}, {"_id": 0}).to_list(12)
+    # Match the scheduler which works on IST day so the homepage rashifal
+    # rolls over for users in India at 00:05 IST, not at UTC midnight.
+    today = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d")
+    horoscopes = await db.horoscopes.find({"date": today}, {"_id": 0}).to_list(12)
+    if len(horoscopes) < 12:
+        # Self-heal: generate any missing rashifals on the fly so the page
+        # never shows empty cards even if the scheduler hasn't fired yet.
+        try:
+            await generate_rashifals_for_date(today)
+        except Exception as _e:
+            logger.error(f"On-demand rashifal generation failed: {_e}")
+        horoscopes = await db.horoscopes.find({"date": today}, {"_id": 0}).to_list(12)
+    return horoscopes
 
 @api_router.get("/horoscopes/{rashi}")
 async def get_horoscope(rashi: int, period: str = "today"):
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d")
     h = await db.horoscopes.find_one({"rashi": rashi, "date": today}, {"_id": 0})
     if not h: raise HTTPException(status_code=404, detail="Horoscope not found")
     return h
@@ -505,8 +516,15 @@ async def get_public_site_settings():
 
 # Public - Banners
 @api_router.get("/banners")
-async def get_public_banners():
-    return await db.banners.find({"is_active": True}, {"_id": 0}).sort("position", 1).to_list(20)
+async def get_public_banners(page: Optional[str] = None):
+    q: Dict[str, Any] = {"is_active": True}
+    if page:
+        # Treat "home" as the default page if not stored explicitly.
+        if page == "home":
+            q["$or"] = [{"page": "home"}, {"page": {"$exists": False}}, {"page": ""}]
+        else:
+            q["page"] = page
+    return await db.banners.find(q, {"_id": 0}).sort("position", 1).to_list(20)
 
 # Public - Coupons validation
 @api_router.post("/coupons/validate")
@@ -879,6 +897,97 @@ async def delete_ai_report(report_id: str):
     await db.ai_reports.delete_one({"id": report_id})
     await log_audit("delete", "ai_report", report_id)
     return {"success": True}
+
+
+# --- AI Report Types (the catalogue of report packages users can buy) ---
+DEFAULT_REPORT_TYPES = [
+    {"slug": "kundli-basic",    "name": "Janam Kundli Basic",    "desc": "Quick overview of your chart",       "price": 0,   "icon": "Scroll",     "color": "#F5C842", "free": True,  "needs_partner": False, "position": 1, "is_active": True},
+    {"slug": "kundli-detailed", "name": "Janam Kundli Detailed", "desc": "Full 10-section deep analysis",      "price": 99,  "icon": "Gem",        "color": "#3FB0FF", "free": False, "needs_partner": False, "position": 2, "is_active": True},
+    {"slug": "kundli-premium",  "name": "Premium PDF Report",    "desc": "14-section extensive forecast",      "price": 299, "icon": "FileDown",   "color": "#E879F9", "free": False, "needs_partner": False, "position": 3, "is_active": True},
+    {"slug": "compatibility",   "name": "Love Compatibility",    "desc": "Marriage compatibility (36 gunas)",  "price": 149, "icon": "Heart",      "color": "#EF4444", "free": False, "needs_partner": True,  "position": 4, "is_active": True},
+    {"slug": "career",          "name": "Career & Wealth",       "desc": "Professional guidance & timing",     "price": 199, "icon": "Briefcase",  "color": "#D4A017", "free": False, "needs_partner": False, "position": 5, "is_active": True},
+    {"slug": "health",          "name": "Health Outlook",        "desc": "Wellness predictions & remedies",    "price": 149, "icon": "HeartPulse", "color": "#22C55E", "free": False, "needs_partner": False, "position": 6, "is_active": True},
+    {"slug": "finance",         "name": "Finance Report",        "desc": "Wealth yogas & investment periods",  "price": 199, "icon": "Wallet",     "color": "#10B981", "free": False, "needs_partner": False, "position": 7, "is_active": True},
+    {"slug": "vastu",           "name": "Vastu Report",          "desc": "Home & office energy guidance",      "price": 249, "icon": "Home",       "color": "#F59E0B", "free": False, "needs_partner": False, "position": 8, "is_active": True},
+    {"slug": "annual",          "name": "Annual Forecast",       "desc": "Month-by-month for next 12 months",  "price": 299, "icon": "Calendar",   "color": "#8B5CF6", "free": False, "needs_partner": False, "position": 9, "is_active": True},
+    {"slug": "sade-sati",       "name": "Sade Sati Analysis",    "desc": "7.5 yr Shani period deep dive",      "price": 149, "icon": "Orbit",      "color": "#6366F1", "free": False, "needs_partner": False, "position": 10, "is_active": True},
+    {"slug": "child-birth",     "name": "Child Birth Report",    "desc": "Progeny & parenting guidance",       "price": 199, "icon": "Baby",       "color": "#F472B6", "free": False, "needs_partner": False, "position": 11, "is_active": True},
+]
+
+async def _ensure_default_report_types():
+    existing = await db.ai_report_types.count_documents({})
+    if existing == 0:
+        for rt in DEFAULT_REPORT_TYPES:
+            await db.ai_report_types.insert_one({
+                "id": str(uuid.uuid4()),
+                **rt,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+@api_router.get("/report-types")
+async def get_public_report_types():
+    await _ensure_default_report_types()
+    return await db.ai_report_types.find({"is_active": True}, {"_id": 0}).sort("position", 1).to_list(50)
+
+@api_router.get("/admin/report-types")
+async def admin_list_report_types():
+    await _ensure_default_report_types()
+    return await db.ai_report_types.find({}, {"_id": 0}).sort("position", 1).to_list(100)
+
+@api_router.post("/admin/report-types")
+async def admin_create_report_type(payload: Dict[str, Any]):
+    if not payload.get("name"):
+        raise HTTPException(status_code=400, detail="Name is required")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "slug": (payload.get("slug") or payload["name"]).lower().replace(" ", "-")[:60],
+        "name": payload["name"],
+        "desc": payload.get("desc", ""),
+        "price": int(payload.get("price", 0) or 0),
+        "icon": payload.get("icon", "Scroll"),
+        "color": payload.get("color", "#8B5CF6"),
+        "free": bool(payload.get("free", False)),
+        "needs_partner": bool(payload.get("needs_partner", False)),
+        "position": int(payload.get("position", 99) or 99),
+        "is_active": bool(payload.get("is_active", True)),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.ai_report_types.insert_one(doc)
+    await log_audit("create", "report_type", doc["id"], doc["name"])
+    return {"success": True, "id": doc["id"]}
+
+@api_router.put("/admin/report-types/{rt_id}")
+async def admin_update_report_type(rt_id: str, payload: Dict[str, Any]):
+    update = {k: v for k, v in payload.items() if k not in ("id", "_id", "created_at")}
+    if "price" in update:
+        try:
+            update["price"] = int(update["price"] or 0)
+        except Exception:
+            update["price"] = 0
+    if "position" in update:
+        try:
+            update["position"] = int(update["position"] or 99)
+        except Exception:
+            update["position"] = 99
+    res = await db.ai_report_types.update_one({"id": rt_id}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Report type not found")
+    await log_audit("update", "report_type", rt_id, payload.get("name", ""))
+    return {"success": True}
+
+@api_router.delete("/admin/report-types/{rt_id}")
+async def admin_delete_report_type(rt_id: str):
+    res = await db.ai_report_types.delete_one({"id": rt_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Report type not found")
+    await log_audit("delete", "report_type", rt_id)
+    return {"success": True}
+
+@api_router.patch("/admin/report-types/{rt_id}/toggle")
+async def admin_toggle_report_type(rt_id: str, data: Dict[str, Any]):
+    await db.ai_report_types.update_one({"id": rt_id}, {"$set": {"is_active": bool(data.get("is_active", True))}})
+    return {"success": True}
+
 
 # --- Admin Blog ---
 @api_router.get("/admin/blog")

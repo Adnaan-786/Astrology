@@ -105,24 +105,7 @@ const HomePage = () => {
               </Link>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 max-w-xl">
-              {[
-                { v: stats.total_users >= 100000 ? `${(stats.total_users / 100000).toFixed(1).replace(".0", "")}L+` : `${(stats.total_users / 1000).toFixed(1).replace(".0", "")}K+`, l: "Happy Users" },
-                { v: `${stats.rating}/5`, l: "Rating" },
-                { v: stats.total_sessions >= 100000 ? `${(stats.total_sessions / 100000).toFixed(1).replace(".0", "")}L+` : `${Math.round(stats.total_sessions / 1000)}K+`, l: "Readings Done" },
-                { v: "24/7", l: "Available" },
-              ].map((s, i) => (
-                <div key={i} className="flex items-center gap-3" data-testid={`hero-stat-${i}`}>
-                  <div className="w-10 h-10 rounded-full bg-[#D4A017]/15 border border-[#D4A017]/40 flex items-center justify-center text-[#F5C842]">
-                    <Star className="w-4 h-4 fill-current" />
-                  </div>
-                  <div>
-                    <p className="text-xl font-bold text-white">{s.v}</p>
-                    <p className="text-[11px] text-zinc-400 uppercase tracking-wider">{s.l}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {/* Hero stats removed per request — keep hero clean. */}
           </div>
         </div>
       </section>
@@ -405,7 +388,6 @@ const HomePage = () => {
                 <li><a href="#" className="hover:text-[#F5C842]">Privacy Policy</a></li>
                 <li><a href="#" className="hover:text-[#F5C842]">Terms of Service</a></li>
                 <li><a href="#" className="hover:text-[#F5C842]">Refund Policy</a></li>
-                <li><Link to="/admin/login" className="hover:text-[#F5C842] inline-flex items-center gap-1" data-testid="footer-admin-link"><Shield className="w-3 h-3" /> Admin</Link></li>
               </ul>
             </div>
           </div>

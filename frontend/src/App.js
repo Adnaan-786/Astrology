@@ -28,6 +28,7 @@ import AdminStore from "@/pages/admin/AdminStore";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminSessions from "@/pages/admin/AdminSessions";
 import AdminAIReports from "@/pages/admin/AdminAIReports";
+import AdminReportTypes from "@/pages/admin/AdminReportTypes";
 import AdminBlog from "@/pages/admin/AdminBlog";
 import AdminPlans from "@/pages/admin/AdminPlans";
 import AdminCoupons from "@/pages/admin/AdminCoupons";
@@ -119,6 +120,7 @@ function App() {
             <Route path="astrologer-applications" element={<AdminAstrologerApplications />} />
             <Route path="sessions" element={<AdminSessions />} />
             <Route path="ai-reports" element={<AdminAIReports />} />
+            <Route path="report-types" element={<AdminReportTypes />} />
             <Route path="horoscope" element={<AdminHoroscope />} />
             <Route path="store" element={<AdminStore />} />
             <Route path="orders" element={<AdminOrders />} />
