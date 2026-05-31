@@ -42,12 +42,16 @@ const OnboardingPage = () => {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      await apiClient.post("/auth/profile", form);
-      // Update local storage user
+      const res = await apiClient.post("/auth/profile", form);
+      // Update local storage user with the response from backend
       try {
-        const stored = JSON.parse(localStorage.getItem("astrovedic_user") || "{}");
-        const updated = { ...stored, ...form, is_onboarded: true };
-        localStorage.setItem("astrovedic_user", JSON.stringify(updated));
+        if (res.data.user) {
+          localStorage.setItem("astrovedic_user", JSON.stringify(res.data.user));
+        } else {
+          const stored = JSON.parse(localStorage.getItem("astrovedic_user") || "{}");
+          const updated = { ...stored, ...form, is_onboarded: true };
+          localStorage.setItem("astrovedic_user", JSON.stringify(updated));
+        }
       } catch (_) {}
       toast.success("Profile saved! Welcome to AstroVedic AI ✨");
       navigate("/dashboard");

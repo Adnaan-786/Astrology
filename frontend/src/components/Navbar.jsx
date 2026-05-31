@@ -8,6 +8,7 @@ import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { logout as authLogout } from "@/lib/authService";
+import apiClient from "@/lib/apiClient";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +57,23 @@ const Navbar = () => {
       } catch (e) { /* noop */ }
     })();
   }, []);
+  // Fetch fresh user data
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const { data } = await apiClient.get('/auth/me');
+        if (data?.user) {
+          localStorage.setItem("astrovedic_user", JSON.stringify(data.user));
+          setUser(data.user);
+        }
+      } catch (e) {
+        // noop
+      }
+    };
+    if (localStorage.getItem("astrovedic_token")) {
+      fetchUser();
+    }
+  }, []);
 
   const markAllRead = () => {
     const ids = notifications.map((n) => n.id);
@@ -73,7 +91,6 @@ const Navbar = () => {
 
   const navLinks = [
     { name: "Home", path: "/" },
-    { name: "Astrologers", path: "/astrologers" },
     { name: "NakshatraAI", path: "/nakshatra-ai" },
     { name: "Cosmic Store", path: "/cosmic-store" },
     { name: "Daily Rashifal", path: "/rashifal" },
@@ -157,7 +174,7 @@ const Navbar = () => {
                 data-testid="wallet-button"
               >
                 <Wallet className="w-4 h-4" />
-                ₹{user.wallet_balance ?? 0}
+                ₹{user.wallet_balance || user.walletBalance || 0}
               </Link>
             )}
 

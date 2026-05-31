@@ -1,11 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import axios from "axios";
-import { API, useApp } from "@/App";
+import { useApp } from "@/App";
 import { useSupport } from "@/components/SupportContext";
 import {
-  Sparkles, Users, ShoppingBag, Sun, Star, Phone, ArrowRight,
-  ChevronDown, Headset, Shield, Mail, Check,
+  Sparkles, ShoppingBag, Sun, Star, ArrowRight,
+  ChevronDown, Headset, Mail, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +13,6 @@ import BannerCarousel from "@/components/BannerCarousel";
 
 // ---- Data ----
 const OFFERINGS = [
-  { icon: Users,        title: "Talk to Astrologer", desc: "Connect with 1000+ verified astrologers instantly.", link: "/astrologers",   cta: "Consult Now",   color: "from-[#8B5CF6] to-[#6D28D9]", ring: "#8B5CF6" },
   { icon: Sparkles,     title: "AI Reports (Paid)",  desc: "Detailed kundli reports & predictions powered by AI.", link: "/nakshatra-ai",  cta: "View Reports",  color: "from-[#3B82F6] to-[#1E40AF]", ring: "#3B82F6" },
   { icon: ShoppingBag,  title: "Cosmic Store",       desc: "Shop authentic gemstones, rudraksha, yantras & more.", link: "/cosmic-store",  cta: "Shop Now",      color: "from-[#10B981] to-[#047857]", ring: "#10B981" },
   { icon: Sun,          title: "Daily Rashifal",     desc: "Read your daily horoscope free in Hindi & English.", link: "/rashifal",      cta: "Read Now",      color: "from-[#F59E0B] to-[#B45309]", ring: "#F59E0B" },
@@ -44,7 +42,7 @@ const REPORT_TIERS = [
 const FAQS = [
   { q: "How can I get my kundli?",               a: "Simply click on 'Get Free Kundli' on the homepage, enter your birth details (name, date, time, place) and our NakshatraAI engine will instantly generate your Vedic birth chart with key insights — completely free, once per account." },
   { q: "Are AI reports accurate?",               a: "Our AI engine is trained on classical Vedic astrology texts and uses your exact planetary positions. The accuracy is on-par with a seasoned human astrologer for standard predictions. For nuanced life guidance, we recommend pairing it with a live astrologer consultation." },
-  { q: "How do I talk to an astrologer?",        a: "Visit the Astrologers page, pick a verified expert based on their speciality and rating, and tap Chat or Call. Billing is per-minute and deducted from your wallet. Your first 2 minutes with a new astrologer are always free." },
+  { q: "How do I use NakshatraAI?",        a: "Visit the NakshatraAI page, choose from AI Chat or AI Reports. Enter your birth details and get personalized Vedic astrology insights instantly. Free Kundli chart is included for all users." },
   { q: "Is my information safe with AstroVedic AI?", a: "Absolutely. Your birth data is encrypted, never shared, and used only to generate your personal readings. Payments are secured via PCI-DSS certified gateways. You can delete your data any time from the dashboard." },
   { q: "Can I get a refund?",                    a: "Yes. If you are unsatisfied with any consultation, raise a support ticket within 48 hours and we will refund your wallet in full. Digital reports are non-refundable once downloaded." },
 ];
@@ -53,19 +51,7 @@ const FAQS = [
 const HomePage = () => {
   const { stats } = useApp();
   const { openSupport } = useSupport();
-  const [astrologers, setAstrologers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [openFaq, setOpenFaq] = useState(0);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await axios.get(`${API}/astrologers/featured`);
-        setAstrologers(data || []);
-      } catch (e) { /* noop */ }
-      finally { setLoading(false); }
-    })();
-  }, []);
 
   return (
     <div className="min-h-screen pb-20 lg:pb-0 av-bg" data-testid="homepage">
@@ -98,9 +84,9 @@ const HomePage = () => {
                   <Sparkles className="w-5 h-5 mr-2" /> Get Free Kundli
                 </Button>
               </Link>
-              <Link to="/astrologers">
-                <Button variant="outline" className="rounded-full px-7 py-6 text-base border-[#8B5CF6] text-[#8B5CF6] hover:bg-[#8B5CF6]/10 w-full sm:w-auto" data-testid="hero-cta-astrologer">
-                  <Phone className="w-5 h-5 mr-2" /> Talk to Astrologer
+              <Link to="/rashifal">
+                <Button variant="outline" className="rounded-full px-7 py-6 text-base border-[#8B5CF6] text-[#8B5CF6] hover:bg-[#8B5CF6]/10 w-full sm:w-auto" data-testid="hero-cta-rashifal">
+                  <Sun className="w-5 h-5 mr-2" /> Daily Rashifal
                 </Button>
               </Link>
             </div>
@@ -122,7 +108,7 @@ const HomePage = () => {
               Everything you need for a <span className="text-gradient-gold">better tomorrow</span>
             </h2>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {OFFERINGS.map((o, idx) => (
               <Link key={idx} to={o.link} data-testid={`offer-card-${idx}`}>
                 <div className="cosmic-card rounded-2xl p-6 h-full flex flex-col items-center text-center hover:-translate-y-1 transition-transform group">
@@ -141,53 +127,7 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* ============ FEATURED ASTROLOGERS ============ */}
-      <section className="py-16 lg:py-20 bg-[#1A1730]/40" data-testid="featured-astrologers-section">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-end justify-between mb-10">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.35em] text-[#F5C842] mb-3">Featured Astrologers</p>
-              <h2 className="font-cinzel text-3xl sm:text-4xl font-bold text-white">Verified experts, one tap away</h2>
-            </div>
-            <Link to="/astrologers" className="hidden sm:flex items-center gap-2 text-[#F5C842] text-sm hover:gap-3 transition-all" data-testid="featured-view-all-link">
-              View All <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {loading
-              ? Array(4).fill(0).map((_, i) => (
-                  <div key={i} className="cosmic-card rounded-2xl h-[320px] shimmer" />
-                ))
-              : astrologers.slice(0, 4).map((a) => (
-                  <div key={a.id} className="cosmic-card rounded-2xl p-5 hover:-translate-y-1 transition-transform relative" data-testid={`featured-astrologer-${a.id}`}>
-                    <span className={`absolute top-4 right-4 w-2.5 h-2.5 rounded-full ${a.is_online ? "bg-emerald-400 animate-pulse" : "bg-zinc-500"}`} />
-                    <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-[#D4A017]/50 mb-4">
-                      <img src={a.photo_url} alt={a.name} className="w-full h-full object-cover" />
-                    </div>
-                    <h3 className="font-cinzel font-semibold text-white mb-1">{a.name}</h3>
-                    <p className="text-xs text-zinc-400 mb-3 line-clamp-1">
-                      {a.specializations.slice(0, 2).join(" • ")} • {a.experience_years}+ Yrs
-                    </p>
-                    <div className="flex items-center gap-1.5 mb-3">
-                      <Star className="w-3.5 h-3.5 text-[#F5C842] fill-[#F5C842]" />
-                      <span className="text-sm text-white font-medium">{a.rating}</span>
-                      <span className="text-xs text-zinc-500">({a.total_reviews.toLocaleString()})</span>
-                    </div>
-                    <p className="font-cinzel text-[#F5C842] text-lg font-semibold mb-3">₹{a.rate_per_minute}/min</p>
-                    <Link to={`/astrologers`}>
-                      <Button size="sm" className="w-full btn-gold rounded-full" data-testid={`featured-consult-${a.id}`}>
-                        Consult Now
-                      </Button>
-                    </Link>
-                  </div>
-                ))}
-          </div>
-          <div className="mt-8 sm:hidden text-center">
-            <Link to="/astrologers" className="text-[#F5C842] text-sm">View All Astrologers →</Link>
-          </div>
-        </div>
-      </section>
 
       {/* ============ AI KUNDLI REPORTS (PAID FOCUS) ============ */}
       <section className="py-16 lg:py-24" data-testid="ai-reports-section">
@@ -357,22 +297,13 @@ const HomePage = () => {
             <div>
               <h5 className="font-semibold text-white text-sm mb-3">Quick Links</h5>
               <ul className="space-y-2 text-sm text-zinc-400">
-                <li><Link to="/astrologers" className="hover:text-[#F5C842]">Astrologers</Link></li>
                 <li><Link to="/nakshatra-ai" className="hover:text-[#F5C842]">AI Reports</Link></li>
                 <li><Link to="/rashifal" className="hover:text-[#F5C842]">Daily Rashifal</Link></li>
                 <li><Link to="/cosmic-store" className="hover:text-[#F5C842]">Store</Link></li>
+                <li><Link to="/blog" className="hover:text-[#F5C842]">Blog</Link></li>
               </ul>
             </div>
-            <div>
-              <h5 className="font-semibold text-white text-sm mb-3">For Professionals</h5>
-              <ul className="space-y-2 text-sm text-zinc-400">
-                <li>
-                  <Link to="/apply-astrologer" className="hover:text-[#F5C842] inline-flex items-center gap-1" data-testid="footer-apply-astrologer-link">
-                    <Sparkles className="w-3 h-3" /> Apply as Astrologer
-                  </Link>
-                </li>
-              </ul>
-            </div>
+
             <div>
               <h5 className="font-semibold text-white text-sm mb-3">Support</h5>
               <ul className="space-y-2 text-sm text-zinc-400">

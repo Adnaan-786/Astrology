@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import {
@@ -41,6 +41,7 @@ const AdminUsers = () => {
 
   useEffect(() => {
     fetchUsers();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, filterPlan]);
 
   const fetchUsers = async () => {
@@ -49,7 +50,7 @@ const AdminUsers = () => {
       const params = new URLSearchParams({ page, limit: 10 });
       if (filterPlan !== "all") params.append("plan", filterPlan);
       
-      const res = await axios.get(`${API}/admin/users?${params.toString()}`);
+      const res = await apiClient.get(`${API}/admin/users?${params.toString()}`);
       setUsers(res.data.users || []);
       setTotal(res.data.total || 0);
     } catch (e) {
@@ -61,7 +62,7 @@ const AdminUsers = () => {
 
   const handleBlockUser = async (userId, isBlocked) => {
     try {
-      await axios.patch(`${API}/admin/users/${userId}/block`, { is_blocked: !isBlocked });
+      await apiClient.patch(`${API}/admin/users/${userId}/block`, { is_blocked: !isBlocked });
       toast.success(isBlocked ? "User unblocked" : "User blocked");
       fetchUsers();
     } catch (e) {
@@ -71,7 +72,7 @@ const AdminUsers = () => {
 
   const handleAdjustWallet = async (userId, amount, reason) => {
     try {
-      await axios.post(`${API}/admin/users/${userId}/wallet`, { amount, reason });
+      await apiClient.post(`${API}/admin/users/${userId}/wallet`, { amount, reason });
       toast.success("Wallet adjusted successfully");
       fetchUsers();
     } catch (e) {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { Link } from "react-router-dom";
 import {
@@ -12,12 +12,16 @@ import { Badge } from "@/components/ui/badge";
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState({
-    totalUsers: 12847,
-    activeSessions: 24,
-    todayRevenue: 45670,
-    onlineAstrologers: 18,
-    pendingOrders: 12,
-    openTickets: 5
+    totalUsers: 0,
+    activeSessions: 0,
+    todayRevenue: 0,
+    onlineAstrologers: 0,
+    pendingOrders: 0,
+    openTickets: 0
+  });
+  const [financeSummary, setFinanceSummary] = useState({
+    this_month: 0,
+    last_month: 0
   });
   const [recentUsers, setRecentUsers] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
@@ -29,12 +33,14 @@ const AdminDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const [statsRes, usersRes] = await Promise.all([
-        axios.get(`${API}/admin/stats`),
-        axios.get(`${API}/admin/users?limit=10`)
+      const [statsRes, usersRes, financeRes] = await Promise.all([
+        apiClient.get('/admin/stats'),
+        apiClient.get('/admin/users?limit=10'),
+        apiClient.get('/admin/finance')
       ]);
       if (statsRes.data) setStats(statsRes.data);
       if (usersRes.data) setRecentUsers(usersRes.data.users || []);
+      if (financeRes.data && financeRes.data.summary) setFinanceSummary(financeRes.data.summary);
     } catch (e) {
       console.error("Error fetching dashboard data:", e);
     } finally {
@@ -184,9 +190,14 @@ const AdminDashboard = () => {
             <div className="h-[200px] flex items-center justify-center">
               <div className="text-center">
                 <TrendingUp className="w-12 h-12 text-green-400 mx-auto mb-3" />
-                <p className="text-2xl font-bold text-white">₹12,45,670</p>
+                <p className="text-2xl font-bold text-white">₹{financeSummary.this_month.toLocaleString()}</p>
                 <p className="text-sm text-slate-400">Total Revenue This Month</p>
-                <Badge className="mt-2 bg-green-500/20 text-green-400">+15% vs last month</Badge>
+                <Badge className={`mt-2 ${financeSummary.this_month >= financeSummary.last_month ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                  {financeSummary.this_month >= financeSummary.last_month ? '+' : ''}
+                  {financeSummary.last_month > 0 
+                    ? Math.round(((financeSummary.this_month - financeSummary.last_month) / financeSummary.last_month) * 100) 
+                    : 100}% vs last month
+                </Badge>
               </div>
             </div>
           </CardContent>

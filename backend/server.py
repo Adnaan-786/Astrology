@@ -20,6 +20,8 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt as jose_jwt
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import razorpay
+import smtplib
+from email.message import EmailMessage
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -28,10 +30,11 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_API_KEY_GROQ = os.environ.get("OPENROUTER_API_KEY_GROQ", "")
+OPENROUTER_API_KEY_GEMINI = os.environ.get("OPENROUTER_API_KEY_GEMINI", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_FREE_MODEL = "google/gemini-2.0-flash-exp:free"
-OPENROUTER_FALLBACK_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+OPENROUTER_GROQ_MODEL = "meta-llama/llama-3.1-8b-instruct"
+OPENROUTER_GEMINI_MODEL = "google/gemini-2.5-flash"
 APP_NAME = "astrovedic"
 
 # ==================== RAZORPAY CONFIG ====================
@@ -224,11 +227,10 @@ class BlogPost(BaseModel):
 
 # ==================== AI (OPENROUTER - FREE) ====================
 
-async def call_openrouter(messages: list, model: str = None, max_tokens: int = 2000) -> str:
-    """Call OpenRouter API with free models. Returns the response text."""
-    model = model or OPENROUTER_FREE_MODEL
+async def call_openrouter(messages: list, model: str, api_key: str, max_tokens: int = 2000) -> str:
+    """Call OpenRouter API. Returns the response text."""
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://astrovedic.ai",
         "X-Title": "AstroVedic AI",
@@ -240,25 +242,18 @@ async def call_openrouter(messages: list, model: str = None, max_tokens: int = 2
         "temperature": 0.7,
     }
     
+    if model == OPENROUTER_GROQ_MODEL:
+        payload["provider"] = {"order": ["Groq"]}
+    
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
             resp = await client.post(OPENROUTER_BASE_URL, json=payload, headers=headers)
+            if resp.status_code != 200:
+                logging.error(f"OpenRouter Error: {resp.status_code} - {resp.text}")
             resp.raise_for_status()
             data = resp.json()
             return data["choices"][0]["message"]["content"]
         except Exception as e:
-            # Try fallback model
-            if model != OPENROUTER_FALLBACK_MODEL:
-                logging.warning(f"Primary model {model} failed: {e}. Trying fallback...")
-                payload["model"] = OPENROUTER_FALLBACK_MODEL
-                try:
-                    resp = await client.post(OPENROUTER_BASE_URL, json=payload, headers=headers)
-                    resp.raise_for_status()
-                    data = resp.json()
-                    return data["choices"][0]["message"]["content"]
-                except Exception as e2:
-                    logging.error(f"Fallback model also failed: {e2}")
-                    raise HTTPException(status_code=500, detail=f"AI service unavailable: {str(e2)}")
             raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
 
 ASTROLOGY_SYSTEM_PROMPT = """You are NakshatraAI, the most advanced Vedic astrology AI assistant created by AstroVedic AI. You have deep knowledge of:
@@ -282,7 +277,7 @@ Guidelines:
 
 Respond in the same language as the user's query (Hindi or English). Use emojis sparingly for warmth."""
 
-async def get_ai_response(session_id: str, user_message: str) -> str:
+async def get_ai_response(session_id: str, user_message: str, model: str, api_key: str) -> str:
     try:
         session = await db.ai_chat_sessions.find_one({"session_id": session_id}, {"_id": 0})
         if not session:
@@ -303,7 +298,7 @@ async def get_ai_response(session_id: str, user_message: str) -> str:
             chat_messages.append({"role": msg["role"], "content": msg["content"]})
         chat_messages.append({"role": "user", "content": user_message})
 
-        response = await call_openrouter(chat_messages)
+        response = await call_openrouter(chat_messages, model, api_key)
 
         new_messages = session.get("messages", [])
         new_messages.append({"role": "user", "content": user_message, "timestamp": datetime.now(timezone.utc).isoformat()})
@@ -476,17 +471,23 @@ class ChatResponse(BaseModel):
 
 @api_router.post("/ai/chat", response_model=ChatResponse)
 async def ai_chat(request: ChatRequest, user: dict = Depends(require_auth)):
-    # AI Chat is paid-only: Silver, Gold, Platinum allowed
-    plan = user.get("plan", "free").lower()
-    if plan not in ["silver", "gold", "platinum"]:
-        raise HTTPException(
-            status_code=403,
-            detail={"error": "PLAN_REQUIRED", "message": "AI Chat is available exclusively on paid plans (Silver/Gold/Platinum). Upgrade to unlock NakshatraAI."}
-        )
+    plan = user.get("plan", "free")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    # Silver: 30 messages/day limit; Gold & Platinum: unlimited
-    if plan == "silver":
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    model = OPENROUTER_GROQ_MODEL
+    api_key = OPENROUTER_API_KEY_GROQ
+
+    if plan == "free":
+        usage = await db.chat_usage.find_one({"user_id": user["id"], "date": today}, {"_id": 0})
+        count = usage.get("count", 0) if usage else 0
+        if count >= 5:
+            raise HTTPException(
+                status_code=429,
+                detail={"error": "DAILY_LIMIT_REACHED", "message": "Free tier limit of 5 messages/day reached. Upgrade to a paid plan for more access."}
+            )
+    elif plan == "silver":
+        model = OPENROUTER_GEMINI_MODEL
+        api_key = OPENROUTER_API_KEY_GEMINI
         usage = await db.chat_usage.find_one({"user_id": user["id"], "date": today}, {"_id": 0})
         count = usage.get("count", 0) if usage else 0
         if count >= 30:
@@ -494,13 +495,19 @@ async def ai_chat(request: ChatRequest, user: dict = Depends(require_auth)):
                 status_code=429,
                 detail={"error": "DAILY_LIMIT_REACHED", "message": "You've reached your daily 30-message limit. Upgrade to Gold or Platinum for unlimited chat."}
             )
+    elif plan in ["gold", "platinum"]:
+        model = OPENROUTER_GEMINI_MODEL
+        api_key = OPENROUTER_API_KEY_GEMINI
+    
+    # Increment count for free/silver
+    if plan in ["free", "silver"]:
         await db.chat_usage.update_one(
             {"user_id": user["id"], "date": today},
             {"$inc": {"count": 1}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
             upsert=True,
         )
 
-    response = await get_ai_response(request.session_id, request.message)
+    response = await get_ai_response(request.session_id, request.message, model, api_key)
     return ChatResponse(response=response, session_id=request.session_id)
 
 
@@ -575,22 +582,36 @@ async def generate_ai_report(request: ReportRequest, current_user: Optional[dict
     if price > 0 and not current_user:
         raise HTTPException(status_code=401, detail="Authentication required for paid reports")
 
-    # Free basic kundli - once per account lifetime
-    if report_type == "kundli-basic" and current_user:
-        existing = await db.ai_reports.find_one(
-            {"user_id": current_user["id"], "report_type": "kundli-basic"}, {"_id": 0}
-        )
-        if existing:
-            raise HTTPException(
-                status_code=403,
-                detail={"error": "FREE_REPORT_USED", "message": "You've already used your free basic Kundli. Try our detailed report for ₹99."},
-            )
+    model = OPENROUTER_GROQ_MODEL
+    api_key = OPENROUTER_API_KEY_GROQ
+    user = None
+    
+    if current_user:
+        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
+        plan = user.get("plan", "free") if user else "free"
+        
+        if plan in ["silver", "gold", "platinum"]:
+            model = OPENROUTER_GEMINI_MODEL
+            api_key = OPENROUTER_API_KEY_GEMINI
+
+        # Free basic kundli - 1 per month for free plan
+        if report_type == "kundli-basic" and plan == "free":
+            current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+            existing = await db.ai_reports.find_one({
+                "user_id": current_user["id"], 
+                "report_type": "kundli-basic",
+                "created_at": {"$regex": f"^{current_month}"}
+            }, {"_id": 0})
+            if existing:
+                raise HTTPException(
+                    status_code=403,
+                    detail={"error": "FREE_REPORT_USED", "message": "You've already used your 1 free basic Kundli for this month. Try our detailed report for ₹99."},
+                )
 
     # For paid reports: deduct wallet balance securely
     wallet_balance = 0
     if price > 0 and current_user:
-        # Refresh user from DB to get latest wallet balance
-        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
+        # User already fetched above
         if user:
             wallet_balance = user.get("wallet_balance", 0)
             
@@ -623,7 +644,7 @@ async def generate_ai_report(request: ReportRequest, current_user: Optional[dict
             {"role": "system", "content": REPORT_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ]
-        report_text = await call_openrouter(report_messages, max_tokens=4000)
+        report_text = await call_openrouter(report_messages, model=model, api_key=api_key, max_tokens=4000)
     except Exception as e:
         logging.error(f"AI Report error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
@@ -654,15 +675,210 @@ async def generate_ai_report(request: ReportRequest, current_user: Optional[dict
         "generatedAt": report_doc["created_at"],
     }
 
+@api_router.get("/ai/reports")
+async def get_user_ai_reports(current_user: dict = Depends(require_auth)):
+    reports = await db.ai_reports.find(
+        {"user_id": current_user["id"]}, 
+        {"_id": 0, "content": 0}
+    ).sort("created_at", -1).to_list(50)
+    return reports
+
 @api_router.get("/ai/chat/{session_id}")
 async def get_chat_history(session_id: str):
     session = await db.ai_chat_sessions.find_one({"session_id": session_id}, {"_id": 0})
     if not session: return {"messages": [], "session_id": session_id}
     return {"messages": session.get("messages", []), "session_id": session_id}
 
+
+class ShippingAddress(BaseModel):
+    street: str
+    city: str
+    state: str
+    zipCode: str
+
+class StoreCheckoutRequest(BaseModel):
+    items: List[dict]
+    customer_name: str
+    customer_email: str
+    customer_phone: str
+    address: ShippingAddress
+
+class VerifyStorePaymentRequest(BaseModel):
+    razorpay_payment_id: str
+    razorpay_order_id: str
+    razorpay_signature: str
+
+@api_router.post("/store/checkout")
+async def create_store_order(request: StoreCheckoutRequest, user: dict = Depends(require_auth)):
+    if not request.items:
+        raise HTTPException(status_code=400, detail="Cart is empty")
+        
+    total_amount = 0
+    db_items = []
+    for item in request.items:
+        prod = await db.products.find_one({"id": item["id"]})
+        if not prod:
+            raise HTTPException(status_code=404, detail=f"Product {item['id']} not found")
+        price = prod.get("discounted_price") or prod.get("price", 0)
+        qty = item.get("quantity", 1)
+        total_amount += price * qty
+        db_items.append({
+            "id": prod["id"],
+            "name": prod["name"],
+            "price": price,
+            "quantity": qty
+        })
+        
+    amount_in_paise = int(total_amount * 100)
+    data = {
+        "amount": amount_in_paise,
+        "currency": "INR",
+        "receipt": f"order_{user['id']}_{int(datetime.now(timezone.utc).timestamp())}",
+    }
+    try:
+        rzp_order = razorpay_client.order.create(data=data)
+        
+        order_doc = {
+            "id": rzp_order["id"],
+            "user_id": user["id"],
+            "user_name": request.customer_name,
+            "user_email": request.customer_email,
+            "user_phone": request.customer_phone,
+            "items": db_items,
+            "total_amount": total_amount,
+            "status": "pending",
+            "payment_method": "razorpay",
+            "shipping_address": request.address.model_dump(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.orders.insert_one(order_doc)
+        
+        return {"order_id": rzp_order["id"], "amount": rzp_order["amount"], "currency": rzp_order["currency"]}
+    except Exception as e:
+        logging.error(f"Razorpay store order creation failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create payment order")
+
+@api_router.post("/store/verify-payment")
+async def verify_store_payment(request: VerifyStorePaymentRequest, user: dict = Depends(require_auth)):
+    try:
+        razorpay_client.utility.verify_payment_signature({
+            'razorpay_order_id': request.razorpay_order_id,
+            'razorpay_payment_id': request.razorpay_payment_id,
+            'razorpay_signature': request.razorpay_signature
+        })
+        
+        rzp_order = razorpay_client.order.fetch(request.razorpay_order_id)
+        if rzp_order["status"] != "paid":
+            raise HTTPException(status_code=400, detail="Order not paid completely")
+            
+        order = await db.orders.find_one({"id": request.razorpay_order_id})
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+            
+        await db.orders.update_one(
+            {"id": request.razorpay_order_id}, 
+            {"$set": {"status": "confirmed", "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        
+        contact = {
+            "name": order.get("user_name"),
+            "email": order.get("user_email"),
+            "phone": order.get("user_phone")
+        }
+        asyncio.create_task(send_order_email(order, order.get("items", []), order.get("shipping_address", {}), contact))
+        
+        return {"success": True, "message": "Payment successful. Order confirmed!"}
+    except razorpay.errors.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid payment signature")
+    except Exception as e:
+        logging.error(f"Razorpay store payment verification failed: {e}")
+        raise HTTPException(status_code=500, detail="Payment verification failed")
+
 @api_router.get("/plans", response_model=List[Plan])
 async def get_plans():
     return await db.plans.find({"is_active": True}, {"_id": 0}).to_list(10)
+
+class PlanOrderRequest(BaseModel):
+    plan_slug: str
+    is_annual: bool
+
+class VerifyPlanPaymentRequest(BaseModel):
+    razorpay_payment_id: str
+    razorpay_order_id: str
+    razorpay_signature: str
+    plan_slug: str
+
+@api_router.post("/plans/create-order")
+async def create_plan_order(request: PlanOrderRequest, user: dict = Depends(require_auth)):
+    plan = await db.plans.find_one({"slug": request.plan_slug}, {"_id": 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+        
+    price = plan.get("price_annual") if request.is_annual else plan.get("price_monthly")
+    if price <= 0:
+        raise HTTPException(status_code=400, detail="Cannot create order for a free plan")
+
+    amount_in_paise = int(price * 100)
+    data = {
+        "amount": amount_in_paise,
+        "currency": "INR",
+        "receipt": f"receipt_{user['id']}_{int(datetime.now(timezone.utc).timestamp())}",
+        "notes": {
+            "user_id": user["id"],
+            "plan_slug": request.plan_slug,
+            "is_annual": str(request.is_annual)
+        }
+    }
+    try:
+        order = razorpay_client.order.create(data=data)
+        return {"order_id": order["id"], "amount": order["amount"], "currency": order["currency"]}
+    except Exception as e:
+        logging.error(f"Razorpay plan order creation failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create payment order")
+
+@api_router.post("/plans/verify-payment")
+async def verify_plan_payment(request: VerifyPlanPaymentRequest, user: dict = Depends(require_auth)):
+    try:
+        razorpay_client.utility.verify_payment_signature({
+            'razorpay_order_id': request.razorpay_order_id,
+            'razorpay_payment_id': request.razorpay_payment_id,
+            'razorpay_signature': request.razorpay_signature
+        })
+        
+        # Verify order matches
+        order = razorpay_client.order.fetch(request.razorpay_order_id)
+        if order["status"] != "paid":
+            raise HTTPException(status_code=400, detail="Order not paid completely")
+            
+        # Update user's plan
+        await db.users.update_one(
+            {"id": user["id"]}, 
+            {"$set": {"plan": request.plan_slug}}
+        )
+        
+        # Log transaction
+        await db.subscription_transactions.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "plan_slug": request.plan_slug,
+            "amount": order["amount"] / 100,
+            "razorpay_payment_id": request.razorpay_payment_id,
+            "razorpay_order_id": request.razorpay_order_id,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        return {"success": True, "message": f"Successfully subscribed to {request.plan_slug} plan"}
+    except razorpay.errors.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid payment signature")
+    except Exception as e:
+        logging.error(f"Razorpay plan payment verification failed: {e}")
+        raise HTTPException(status_code=500, detail="Payment verification failed")
+
+@api_router.post("/plans/subscribe-free")
+async def subscribe_free_plan(user: dict = Depends(require_auth)):
+    await db.users.update_one({"id": user["id"]}, {"$set": {"plan": "free"}})
+    return {"success": True, "message": "Successfully switched to free plan"}
 
 @api_router.get("/blog", response_model=List[BlogPost])
 async def get_blog_posts(category: Optional[str] = None, limit: int = 10):
@@ -683,9 +899,9 @@ async def get_stats():
     total_astrologers = await db.astrologers.count_documents({})
     online_astrologers = await db.astrologers.count_documents({"is_online": True})
     return {
-        "total_users": max(total_users, 12847),
-        "online_astrologers": max(online_astrologers, 24),
-        "total_sessions": 50000,
+        "total_users": total_users,
+        "online_astrologers": online_astrologers,
+        "total_sessions": await db.sessions.count_documents({}),
         "rating": 4.9
     }
 
@@ -972,7 +1188,9 @@ async def save_user_profile(profile: ProfileUpdate, current_user: dict = Depends
     update_data["is_onboarded"] = True
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.users.update_one({"id": current_user["id"]}, {"$set": update_data})
-    return {"success": True, "message": "Profile saved successfully"}
+    updated_user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
+    user_response = {k: v for k, v in updated_user.items() if k not in ("password_hash", "_id")}
+    return {"success": True, "message": "Profile saved successfully", "user": user_response}
 
 @api_router.put("/auth/profile")
 async def update_user_profile(profile: ProfileUpdate, current_user: dict = Depends(require_auth)):
@@ -1042,12 +1260,12 @@ async def get_admin_stats(_admin: dict = Depends(require_admin)):
         total_revenue += txn.get("amount", 0)
     open_tickets = await db.support_tickets.count_documents({"status": {"$in": ["open", "in_progress"]}})
     return {
-        "totalUsers": max(total_users, 12847),
+        "totalUsers": total_users,
         "activeSessions": await db.sessions.count_documents({"status": "active"}),
-        "todayRevenue": max(int(total_revenue), 45670),
-        "onlineAstrologers": max(online_astrologers, 18),
+        "todayRevenue": int(total_revenue),
+        "onlineAstrologers": online_astrologers,
         "pendingOrders": await db.orders.count_documents({"status": "pending"}),
-        "openTickets": max(int(open_tickets), 5),
+        "openTickets": int(open_tickets),
         "totalProducts": total_products,
         "totalAstrologers": total_astrologers,
         "totalOrders": total_orders
@@ -1061,15 +1279,7 @@ async def get_admin_users(page: int = 1, limit: int = 10, plan: Optional[str] = 
     skip = (page - 1) * limit
     users = await db.users.find(query, {"_id": 0}).skip(skip).limit(limit).to_list(limit)
     total = await db.users.count_documents(query)
-    if not users:
-        users = [
-            {"id": f"user_{i}", "name": f"User {i}", "email": f"user{i}@example.com",
-             "plan": ["free", "silver", "gold", "platinum"][i % 4], "wallet_balance": i * 100,
-             "created_at": datetime.now(timezone.utc).isoformat(), "is_blocked": False,
-             "rashi": "Leo", "total_spent": i * 500}
-            for i in range(1, 11)
-        ]
-        return {"users": users, "total": 100}
+
     return {"users": users, "total": total}
 
 @api_router.patch("/admin/users/{user_id}/block")
@@ -1177,15 +1387,7 @@ async def get_admin_orders(status: Optional[str] = None, _admin: dict = Depends(
     query = {}
     if status and status != "all": query["status"] = status
     orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
-    if not orders:
-        orders = [
-            {"id": str(uuid.uuid4())[:8], "user_name": f"Customer {i}", "user_email": f"cust{i}@email.com",
-             "items": [{"name": "Blue Sapphire", "qty": 1, "price": 12999}],
-             "total_amount": 12999 + i * 1000, "status": ["pending", "confirmed", "shipped", "delivered"][i % 4],
-             "payment_method": "wallet", "shipping_address": f"Address {i}, City",
-             "created_at": (datetime.now(timezone.utc) - timedelta(days=i)).isoformat()}
-            for i in range(1, 9)
-        ]
+
     return orders
 
 @api_router.patch("/admin/orders/{order_id}/status")
@@ -1201,16 +1403,7 @@ async def get_admin_sessions(status: Optional[str] = None, _admin: dict = Depend
     query = {}
     if status and status != "all": query["status"] = status
     sessions = await db.sessions.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
-    if not sessions:
-        statuses = ["active", "completed", "cancelled"]
-        sessions = [
-            {"id": str(uuid.uuid4())[:8], "user_name": f"User {i}", "astrologer_name": ["Pandit Rajesh", "Dr. Priya", "Acharya Vinod"][i % 3],
-             "type": ["chat", "call", "video"][i % 3], "duration_minutes": random.randint(5, 45),
-             "amount": random.randint(100, 1500), "status": statuses[i % 3],
-             "rating": random.randint(3, 5) if statuses[i % 3] == "completed" else None,
-             "created_at": (datetime.now(timezone.utc) - timedelta(hours=i * 2)).isoformat()}
-            for i in range(12)
-        ]
+
     return sessions
 
 @api_router.patch("/admin/sessions/{session_id}/end")
@@ -1223,16 +1416,7 @@ async def end_session(session_id: str, _admin: dict = Depends(require_admin)):
 @api_router.get("/admin/ai-reports")
 async def get_admin_ai_reports(_admin: dict = Depends(require_admin)):
     reports = await db.ai_reports.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    if not reports:
-        report_types = ["Kundli Analysis", "Marriage Compatibility", "Career Report", "Health Report", "Financial Forecast", "Yearly Prediction"]
-        reports = [
-            {"id": str(uuid.uuid4())[:8], "user_name": f"User {i}", "user_email": f"user{i}@email.com",
-             "report_type": report_types[i % len(report_types)],
-             "status": ["completed", "processing", "failed"][i % 3],
-             "tokens_used": random.randint(500, 3000),
-             "created_at": (datetime.now(timezone.utc) - timedelta(days=i)).isoformat()}
-            for i in range(15)
-        ]
+
     return reports
 
 @api_router.delete("/admin/ai-reports/{report_id}")
@@ -1404,21 +1588,7 @@ async def toggle_plan(plan_id: str, data: dict, _admin: dict = Depends(require_a
 @api_router.get("/admin/coupons")
 async def get_admin_coupons(_admin: dict = Depends(require_admin)):
     coupons = await db.coupons.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    if not coupons:
-        coupons = [
-            {"id": str(uuid.uuid4())[:8], "code": "ASTRO50", "discount_type": "percentage", "discount_value": 50,
-             "min_order": 500, "max_discount": 200, "usage_limit": 100, "usage_count": 45,
-             "is_active": True, "expires_at": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
-             "created_at": datetime.now(timezone.utc).isoformat()},
-            {"id": str(uuid.uuid4())[:8], "code": "WELCOME100", "discount_type": "flat", "discount_value": 100,
-             "min_order": 299, "max_discount": 100, "usage_limit": 500, "usage_count": 234,
-             "is_active": True, "expires_at": (datetime.now(timezone.utc) + timedelta(days=60)).isoformat(),
-             "created_at": datetime.now(timezone.utc).isoformat()},
-            {"id": str(uuid.uuid4())[:8], "code": "NEWYEAR25", "discount_type": "percentage", "discount_value": 25,
-             "min_order": 1000, "max_discount": 500, "usage_limit": 200, "usage_count": 200,
-             "is_active": False, "expires_at": (datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
-             "created_at": (datetime.now(timezone.utc) - timedelta(days=40)).isoformat()},
-        ]
+
     return coupons
 
 @api_router.post("/admin/coupons")
@@ -1452,27 +1622,17 @@ async def toggle_coupon(coupon_id: str, data: dict, _admin: dict = Depends(requi
 @api_router.get("/admin/finance")
 async def get_admin_finance(_admin: dict = Depends(require_admin)):
     transactions = await db.wallet_transactions.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    if not transactions:
-        txn_types = ["credit", "debit"]
-        descriptions = ["Wallet Recharge", "Consultation Payment", "Product Purchase", "Refund", "Plan Subscription", "Referral Bonus"]
-        transactions = [
-            {"id": str(uuid.uuid4())[:8], "user_id": f"user_{i}", "user_name": f"User {i}",
-             "type": txn_types[i % 2], "amount": random.randint(100, 5000),
-             "description": descriptions[i % len(descriptions)],
-             "created_at": (datetime.now(timezone.utc) - timedelta(hours=i * 3)).isoformat()}
-            for i in range(20)
-        ]
     total_credit = sum(t["amount"] for t in transactions if t.get("type") == "credit")
     total_debit = sum(t["amount"] for t in transactions if t.get("type") == "debit")
     return {
         "transactions": transactions,
         "summary": {
-            "total_revenue": max(total_credit, 145670),
-            "total_payouts": max(total_debit, 45230),
-            "net_profit": max(total_credit - total_debit, 100440),
-            "pending_settlements": 12340,
-            "this_month": 45670,
-            "last_month": 38900
+            "total_revenue": total_credit,
+            "total_payouts": total_debit,
+            "net_profit": total_credit - total_debit,
+            "pending_settlements": 0,
+            "this_month": 0,
+            "last_month": 0
         }
     }
 
@@ -1480,17 +1640,7 @@ async def get_admin_finance(_admin: dict = Depends(require_admin)):
 @api_router.get("/admin/banners")
 async def get_admin_banners(_admin: dict = Depends(require_admin)):
     banners = await db.banners.find({}, {"_id": 0}).sort("position", 1).to_list(50)
-    if not banners:
-        banners = [
-            {"id": str(uuid.uuid4())[:8], "title": "Free Kundli Report", "subtitle": "Get your detailed birth chart analysis free",
-             "image_url": "https://images.unsplash.com/photo-1627947224567-4b17c3137ad4?w=1200",
-             "link": "/nakshatra-ai", "position": 1, "is_active": True, "page": "home",
-             "created_at": datetime.now(timezone.utc).isoformat()},
-            {"id": str(uuid.uuid4())[:8], "title": "Gemstone Sale - 30% Off", "subtitle": "Certified natural gemstones with lab report",
-             "image_url": "https://images.unsplash.com/photo-1613843351058-1dd06fda7c02?w=1200",
-             "link": "/cosmic-store", "position": 2, "is_active": True, "page": "home",
-             "created_at": datetime.now(timezone.utc).isoformat()},
-        ]
+
     return banners
 
 @api_router.post("/admin/banners")
@@ -1524,15 +1674,7 @@ async def toggle_banner(banner_id: str, data: dict, _admin: dict = Depends(requi
 @api_router.get("/admin/notifications")
 async def get_admin_notifications(_admin: dict = Depends(require_admin)):
     notifs = await db.notifications.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    if not notifs:
-        notifs = [
-            {"id": str(uuid.uuid4())[:8], "title": "Welcome to AstroVedic!", "message": "Start your cosmic journey today.",
-             "type": "all", "target": "all_users", "is_sent": True, "sent_count": 12847,
-             "created_at": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()},
-            {"id": str(uuid.uuid4())[:8], "title": "New Year Sale!", "message": "50% off on all consultations.",
-             "type": "promotional", "target": "all_users", "is_sent": True, "sent_count": 12847,
-             "created_at": (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()},
-        ]
+
     return notifs
 
 
@@ -1542,21 +1684,7 @@ async def get_public_notifications():
     notifs = await db.notifications.find(
         {"is_sent": True}, {"_id": 0}
     ).sort("created_at", -1).to_list(20)
-    if not notifs:
-        notifs = [
-            {"id": "n1", "title": "Welcome to AstroVedic AI 🙏",
-             "message": "Get your free Kundli today and explore AI-powered Vedic astrology.",
-             "type": "info", "is_sent": True,
-             "created_at": (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()},
-            {"id": "n2", "title": "Daily Rashifal updated ✨",
-             "message": "Today's horoscope is ready for all 12 rashis.",
-             "type": "rashifal", "is_sent": True,
-             "created_at": (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()},
-            {"id": "n3", "title": "First consultation: 50% off 🎁",
-             "message": "Use code FIRST50 on your first astrologer consultation.",
-             "type": "promotional", "is_sent": True,
-             "created_at": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()},
-        ]
+
     return notifs
 
 @api_router.post("/admin/notifications")
@@ -1585,16 +1713,7 @@ async def delete_notification(notif_id: str, _admin: dict = Depends(require_admi
 @api_router.get("/admin/reviews")
 async def get_admin_reviews(_admin: dict = Depends(require_admin)):
     reviews = await db.reviews.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    if not reviews:
-        reviews = [
-            {"id": str(uuid.uuid4())[:8], "user_name": f"User {i}", "entity_type": ["astrologer", "product", "platform"][i % 3],
-             "entity_name": ["Pandit Rajesh", "Blue Sapphire", "AstroVedic AI"][i % 3],
-             "entity_id": f"entity_{i}", "rating": random.randint(2, 5),
-             "comment": ["Great experience! Very accurate predictions.", "Good quality gemstone, fast delivery.", "Amazing platform for astrology consultations.", "Average experience, could be better.", "Excellent! Highly recommended."][i % 5],
-             "is_approved": i % 3 != 1, "is_flagged": i % 5 == 3,
-             "created_at": (datetime.now(timezone.utc) - timedelta(days=i)).isoformat()}
-            for i in range(15)
-        ]
+
     return reviews
 
 @api_router.patch("/admin/reviews/{review_id}/approve")
@@ -1620,23 +1739,7 @@ async def get_admin_support_tickets(status: Optional[str] = None, _admin: dict =
     query = {}
     if status and status != "all": query["status"] = status
     tickets = await db.support_tickets.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
-    if not tickets:
-        subjects = ["Payment not received", "Cannot access premium features", "Wrong horoscope shown", "Astrologer didn't respond", "Refund request", "App is crashing"]
-        priorities = ["high", "medium", "low"]
-        tickets = [
-            {"id": str(uuid.uuid4())[:8], "user_name": f"User {i}", "user_email": f"user{i}@email.com",
-             "subject": subjects[i % len(subjects)], "description": f"Detailed description of issue {i}...",
-             "priority": priorities[i % 3], "status": ["open", "in_progress", "resolved", "closed"][i % 4],
-             "category": ["payment", "technical", "astrologer", "general"][i % 4],
-             "messages": [
-                 {"sender": "user", "content": f"I need help with {subjects[i % len(subjects)].lower()}", "timestamp": (datetime.now(timezone.utc) - timedelta(hours=i * 2)).isoformat()},
-                 {"sender": "admin", "content": "We are looking into this issue. Please be patient.", "timestamp": (datetime.now(timezone.utc) - timedelta(hours=i)).isoformat()} if i % 2 == 0 else None
-             ],
-             "created_at": (datetime.now(timezone.utc) - timedelta(days=i)).isoformat()}
-            for i in range(10)
-        ]
-        for t in tickets:
-            t["messages"] = [m for m in t["messages"] if m]
+
     return tickets
 
 @api_router.patch("/admin/support/{ticket_id}/status")
@@ -1693,17 +1796,7 @@ async def save_admin_settings(settings: dict, _admin: dict = Depends(require_adm
 @api_router.get("/admin/audit")
 async def get_audit_logs(limit: int = 100, _admin: dict = Depends(require_admin)):
     logs = await db.audit_logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
-    if not logs:
-        actions = ["create", "update", "delete", "login", "publish_all", "send", "approve_review", "block_user", "wallet_adjust"]
-        entity_types = ["astrologer", "product", "blog", "horoscope", "user", "plan", "coupon", "notification", "settings"]
-        logs = [
-            {"id": str(uuid.uuid4())[:8], "action": actions[i % len(actions)],
-             "entity_type": entity_types[i % len(entity_types)],
-             "entity_id": f"entity_{i}", "details": f"Action on {entity_types[i % len(entity_types)]}",
-             "admin_id": "admin_001", "admin_name": "Admin",
-             "created_at": (datetime.now(timezone.utc) - timedelta(hours=i * 2)).isoformat()}
-            for i in range(25)
-        ]
+
     return logs
 
 # ==================== SEED DATA ====================

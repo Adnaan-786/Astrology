@@ -1,8 +1,7 @@
 import { useState, useEffect, createContext, useContext } from "react";
 import { useNavigate, useLocation, Outlet, Link } from "react-router-dom";
-import axios from "axios";
-import { API } from "@/App";
 import apiClient from "@/lib/apiClient";
+import { API } from "@/App";
 import { logout as authLogout } from "@/lib/authService";
 import { toast } from "sonner";
 import {
@@ -97,7 +96,7 @@ export const AdminLayout = () => {
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await axios.get(`${API}/admin/astrologer-applications?status=pending`);
+        const res = await apiClient.get(`${API}/admin/astrologer-applications?status=pending`);
         if (!cancelled) setPendingAppCount(res.data?.counts?.pending || 0);
       } catch (_) {}
     };

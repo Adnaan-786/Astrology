@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { 
@@ -38,7 +39,90 @@ const CosmicStorePage = () => {
 
   useEffect(() => {
     fetchProducts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory]);
+
+
+  const [checkoutStep, setCheckoutStep] = useState(1);
+  const [formData, setFormData] = useState({
+    name: "", email: "", phone: "", street: "", city: "", state: "", zipCode: ""
+  });
+
+  const handleInputChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleCheckout = async (e) => {
+    e.preventDefault();
+    setCheckoutStep(3);
+    
+    const userStr = localStorage.getItem("astrovedic_user");
+    if (!userStr) {
+      toast.error("Please login to place an order");
+      setCheckoutStep(2);
+      return;
+    }
+
+    try {
+      const payload = {
+        items: cart.map(i => ({ id: i.id, quantity: i.quantity })),
+        customer_name: formData.name,
+        customer_email: formData.email,
+        customer_phone: formData.phone,
+        address: {
+          street: formData.street,
+          city: formData.city,
+          state: formData.state,
+          zipCode: formData.zipCode
+        }
+      };
+      
+      const { data: orderData } = await apiClient.post("/store/checkout", payload);
+      
+      const options = {
+        key: "rzp_test_Ss2yfn9UjqYkwa",
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "AstroVedic Cosmic Store",
+        description: `Order ${orderData.order_id}`,
+        order_id: orderData.order_id,
+        handler: async function (response) {
+          try {
+            await apiClient.post("/store/verify-payment", {
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            toast.success("Payment successful! Order confirmed.");
+            setCart([]);
+            setShowCart(false);
+            setCheckoutStep(1);
+          } catch (err) {
+            console.error("Verification error:", err);
+            toast.error("Payment verification failed. Contact support.");
+            setCheckoutStep(2);
+          }
+        },
+        prefill: {
+          name: formData.name,
+          email: formData.email,
+          contact: formData.phone
+        },
+        theme: { color: "#D4AF37" }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response){
+        toast.error("Payment failed: " + response.error.description);
+        setCheckoutStep(2);
+      });
+      rzp.open();
+    } catch (error) {
+      console.error("Checkout init error:", error);
+      toast.error(error?.response?.data?.detail || "Failed to initiate checkout.");
+      setCheckoutStep(2);
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -335,73 +419,147 @@ const CosmicStorePage = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Cart Drawer */}
-        <Dialog open={showCart} onOpenChange={setShowCart}>
-          <DialogContent className="bg-cosmic-dark border-cosmic-purple/30 max-w-md">
-            <DialogHeader>
-              <DialogTitle className="font-cinzel text-xl text-white flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-cosmic-gold" />
-                Your Cart
-              </DialogTitle>
-            </DialogHeader>
-            
-            {cart.length === 0 ? (
-              <div className="text-center py-8">
-                <ShoppingCart className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-                <p className="text-zinc-400">Your cart is empty</p>
-              </div>
-            ) : (
-              <div className="space-y-4 mt-4">
-                {cart.map(item => (
-                  <div key={item.id} className="flex gap-3 p-3 glass rounded-lg" data-testid={`cart-item-${item.id}`}>
-                    <img 
-                      src={item.images[0]} 
-                      alt={item.name}
-                      className="w-16 h-16 rounded-lg object-cover"
-                    />
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium text-white">{item.name}</h4>
-                      <p className="text-cosmic-gold font-semibold">
-                        ₹{(item.discounted_price || item.price).toLocaleString()}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
+        {/* Cart Drawer & Checkout */}
+        <Dialog open={showCart} onOpenChange={(open) => {
+          setShowCart(open);
+          if (!open) setTimeout(() => setCheckoutStep(1), 300);
+        }}>
+          <DialogContent className="bg-cosmic-dark border-cosmic-purple/30 max-w-md max-h-[90vh] overflow-y-auto">
+            {checkoutStep === 1 ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="font-cinzel text-xl text-white flex items-center gap-2">
+                    <ShoppingCart className="w-5 h-5 text-cosmic-gold" />
+                    Your Cart
+                  </DialogTitle>
+                </DialogHeader>
+                
+                {cart.length === 0 ? (
+                  <div className="text-center py-8">
+                    <ShoppingCart className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
+                    <p className="text-zinc-400">Your cart is empty</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 mt-4">
+                    {cart.map(item => (
+                      <div key={item.id} className="flex gap-3 p-3 glass rounded-lg" data-testid={`cart-item-${item.id}`}>
+                        <img 
+                          src={item.images[0]} 
+                          alt={item.name}
+                          className="w-16 h-16 rounded-lg object-cover"
+                        />
+                        <div className="flex-1">
+                          <h4 className="text-sm font-medium text-white">{item.name}</h4>
+                          <p className="text-cosmic-gold font-semibold">
+                            ₹{(item.discounted_price || item.price).toLocaleString()}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <button 
+                              className="w-6 h-6 rounded bg-cosmic-surface text-white"
+                              onClick={() => updateQuantity(item.id, -1)}
+                            >
+                              -
+                            </button>
+                            <span className="text-white text-sm">{item.quantity}</span>
+                            <button 
+                              className="w-6 h-6 rounded bg-cosmic-surface text-white"
+                              onClick={() => updateQuantity(item.id, 1)}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
                         <button 
-                          className="w-6 h-6 rounded bg-cosmic-surface text-white"
-                          onClick={() => updateQuantity(item.id, -1)}
+                          className="text-zinc-400 hover:text-red-400"
+                          onClick={() => removeFromCart(item.id)}
                         >
-                          -
-                        </button>
-                        <span className="text-white text-sm">{item.quantity}</span>
-                        <button 
-                          className="w-6 h-6 rounded bg-cosmic-surface text-white"
-                          onClick={() => updateQuantity(item.id, 1)}
-                        >
-                          +
+                          <X className="w-4 h-4" />
                         </button>
                       </div>
+                    ))}
+                    
+                    <div className="pt-4 border-t border-white/10">
+                      <div className="flex justify-between mb-4">
+                        <span className="text-zinc-400">Total</span>
+                        <span className="text-xl font-bold text-cosmic-gold">₹{cartTotal.toLocaleString()}</span>
+                      </div>
+                      <Button className="w-full btn-gold" onClick={() => {
+                        const userStr = localStorage.getItem("astrovedic_user");
+                        if (!userStr) {
+                           toast.error("Please login to place an order");
+                           return;
+                        }
+                        const user = JSON.parse(userStr);
+                        setFormData(prev => ({
+                          ...prev,
+                          name: user.name || "",
+                          email: user.email || ""
+                        }));
+                        setCheckoutStep(2);
+                      }} data-testid="checkout-btn">
+                        Proceed to Checkout
+                      </Button>
                     </div>
-                    <button 
-                      className="text-zinc-400 hover:text-red-400"
-                      onClick={() => removeFromCart(item.id)}
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
                   </div>
-                ))}
+                )}
+              </>
+            ) : (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="font-cinzel text-xl text-white flex items-center gap-2">
+                    <Truck className="w-5 h-5 text-cosmic-gold" />
+                    Shipping Details
+                  </DialogTitle>
+                </DialogHeader>
                 
-                <div className="pt-4 border-t border-white/10">
-                  <div className="flex justify-between mb-4">
-                    <span className="text-zinc-400">Total</span>
-                    <span className="text-xl font-bold text-cosmic-gold">₹{cartTotal.toLocaleString()}</span>
+                <form onSubmit={handleCheckout} className="space-y-4 mt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs text-zinc-400">Name</label>
+                      <Input required name="name" value={formData.name} onChange={handleInputChange} className="bg-cosmic-surface border-cosmic-purple/30" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-zinc-400">Phone</label>
+                      <Input required name="phone" type="tel" value={formData.phone} onChange={handleInputChange} className="bg-cosmic-surface border-cosmic-purple/30" />
+                    </div>
                   </div>
-                  <Button className="w-full btn-gold" data-testid="checkout-btn">
-                    Proceed to Checkout
-                  </Button>
-                  <p className="text-[10px] text-zinc-500 mt-2 text-center">
-                    Payment integration coming soon
-                  </p>
-                </div>
-              </div>
+                  
+                  <div className="space-y-1">
+                    <label className="text-xs text-zinc-400">Email</label>
+                    <Input required name="email" type="email" value={formData.email} onChange={handleInputChange} className="bg-cosmic-surface border-cosmic-purple/30" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs text-zinc-400">Street Address</label>
+                    <Input required name="street" value={formData.street} onChange={handleInputChange} className="bg-cosmic-surface border-cosmic-purple/30" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs text-zinc-400">City</label>
+                      <Input required name="city" value={formData.city} onChange={handleInputChange} className="bg-cosmic-surface border-cosmic-purple/30" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-zinc-400">State</label>
+                      <Input required name="state" value={formData.state} onChange={handleInputChange} className="bg-cosmic-surface border-cosmic-purple/30" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 w-1/2">
+                    <label className="text-xs text-zinc-400">PIN Code</label>
+                    <Input required name="zipCode" value={formData.zipCode} onChange={handleInputChange} className="bg-cosmic-surface border-cosmic-purple/30" />
+                  </div>
+
+                  <div className="pt-4 border-t border-white/10 flex items-center justify-between mt-6">
+                    <Button type="button" variant="ghost" onClick={() => setCheckoutStep(1)} className="text-zinc-400 hover:text-white">
+                      Back
+                    </Button>
+                    <Button type="submit" disabled={checkoutStep === 3} className="btn-gold">
+                      {checkoutStep === 3 ? "Processing..." : `Pay ₹${cartTotal.toLocaleString()}`}
+                    </Button>
+                  </div>
+                </form>
+              </>
             )}
           </DialogContent>
         </Dialog>

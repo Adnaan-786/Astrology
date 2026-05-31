@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { HeadphonesIcon, Send, Clock, CheckCircle, AlertTriangle, XCircle } from "lucide-react";
@@ -20,20 +20,21 @@ const AdminSupport = () => {
   const [selected, setSelected] = useState(null);
   const [reply, setReply] = useState("");
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchTickets(); }, [filter]);
 
   const fetchTickets = async () => {
     try {
       setLoading(true);
       const params = filter !== "all" ? `?status=${filter}` : "";
-      const res = await axios.get(`${API}/admin/support${params}`);
+      const res = await apiClient.get(`${API}/admin/support${params}`);
       setTickets(res.data || []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
   const updateStatus = async (id, status) => {
     try {
-      await axios.patch(`${API}/admin/support/${id}/status`, { status });
+      await apiClient.patch(`${API}/admin/support/${id}/status`, { status });
       toast.success(`Ticket marked as ${status}`);
       fetchTickets();
       if (selected?.id === id) setSelected(prev => ({ ...prev, status }));
@@ -43,7 +44,7 @@ const AdminSupport = () => {
   const sendReply = async () => {
     if (!reply.trim() || !selected) return;
     try {
-      await axios.post(`${API}/admin/support/${selected.id}/reply`, { message: reply });
+      await apiClient.post(`${API}/admin/support/${selected.id}/reply`, { message: reply });
       toast.success("Reply sent");
       setReply("");
       fetchTickets();

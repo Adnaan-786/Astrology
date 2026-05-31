@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { Package, Search, Eye, Truck, CheckCircle, Clock, XCircle } from "lucide-react";
@@ -19,20 +19,21 @@ const AdminOrders = () => {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchOrders(); }, [filter]);
 
   const fetchOrders = async () => {
     try {
       setLoading(true);
       const params = filter !== "all" ? `?status=${filter}` : "";
-      const res = await axios.get(`${API}/admin/orders${params}`);
+      const res = await apiClient.get(`${API}/admin/orders${params}`);
       setOrders(res.data || []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
   const updateStatus = async (id, status) => {
     try {
-      await axios.patch(`${API}/admin/orders/${id}/status`, { status });
+      await apiClient.patch(`${API}/admin/orders/${id}/status`, { status });
       toast.success(`Order marked as ${status}`);
       fetchOrders();
       if (selected?.id === id) setSelected(prev => ({ ...prev, status }));

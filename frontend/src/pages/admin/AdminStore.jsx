@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import {
@@ -65,7 +65,7 @@ const AdminStore = () => {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API}/products`);
+      const res = await apiClient.get(`${API}/products`);
       setProducts(res.data);
     } catch (e) {
       console.error("Error fetching products:", e);
@@ -76,7 +76,7 @@ const AdminStore = () => {
 
   const fetchOrders = async () => {
     try {
-      const res = await axios.get(`${API}/admin/orders`);
+      const res = await apiClient.get(`${API}/admin/orders`);
       setOrders(res.data || []);
     } catch (e) {
       console.error("Error fetching orders:", e);
@@ -92,10 +92,10 @@ const AdminStore = () => {
       };
       
       if (editingProduct) {
-        await axios.put(`${API}/admin/products/${editingProduct.id}`, payload);
+        await apiClient.put(`${API}/admin/products/${editingProduct.id}`, payload);
         toast.success("Product updated successfully");
       } else {
-        await axios.post(`${API}/admin/products`, payload);
+        await apiClient.post(`${API}/admin/products`, payload);
         toast.success("Product added successfully");
       }
       setShowForm(false);
@@ -127,7 +127,7 @@ const AdminStore = () => {
   const handleDelete = async (id) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
     try {
-      await axios.delete(`${API}/admin/products/${id}`);
+      await apiClient.delete(`${API}/admin/products/${id}`);
       toast.success("Product deleted");
       fetchProducts();
     } catch (e) {

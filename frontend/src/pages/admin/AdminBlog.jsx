@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { FileText, Plus, Edit, Trash2, Eye, EyeOff, Search } from "lucide-react";
@@ -32,7 +32,7 @@ const AdminBlog = () => {
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API}/admin/blog`);
+      const res = await apiClient.get(`${API}/admin/blog`);
       setPosts(res.data || []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
@@ -57,10 +57,10 @@ const AdminBlog = () => {
     const payload = { ...form, slug: form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 50) };
     try {
       if (editing) {
-        await axios.put(`${API}/admin/blog/${editing.id}`, payload);
+        await apiClient.put(`${API}/admin/blog/${editing.id}`, payload);
         toast.success("Post updated");
       } else {
-        await axios.post(`${API}/admin/blog`, payload);
+        await apiClient.post(`${API}/admin/blog`, payload);
         toast.success("Post created");
       }
       setShowForm(false);
@@ -71,7 +71,7 @@ const AdminBlog = () => {
 
   const togglePublish = async (post) => {
     try {
-      await axios.patch(`${API}/admin/blog/${post.id}/publish`, { is_published: !post.is_published });
+      await apiClient.patch(`${API}/admin/blog/${post.id}/publish`, { is_published: !post.is_published });
       toast.success(post.is_published ? "Post unpublished" : "Post published");
       fetchPosts();
     } catch (e) { toast.error("Failed to update"); }
@@ -80,7 +80,7 @@ const AdminBlog = () => {
   const deletePost = async (id) => {
     if (!confirm("Delete this post?")) return;
     try {
-      await axios.delete(`${API}/admin/blog/${id}`);
+      await apiClient.delete(`${API}/admin/blog/${id}`);
       toast.success("Post deleted");
       fetchPosts();
     } catch (e) { toast.error("Failed to delete"); }

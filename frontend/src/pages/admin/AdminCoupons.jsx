@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { Percent, Plus, Edit, Trash2, ToggleLeft, ToggleRight, Copy } from "lucide-react";
@@ -29,7 +29,7 @@ const AdminCoupons = () => {
   const fetchCoupons = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API}/admin/coupons`);
+      const res = await apiClient.get(`${API}/admin/coupons`);
       setCoupons(res.data || []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
@@ -55,10 +55,10 @@ const AdminCoupons = () => {
     const payload = { ...form, code: form.code.toUpperCase(), expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : "" };
     try {
       if (editing) {
-        await axios.put(`${API}/admin/coupons/${editing.id}`, payload);
+        await apiClient.put(`${API}/admin/coupons/${editing.id}`, payload);
         toast.success("Coupon updated");
       } else {
-        await axios.post(`${API}/admin/coupons`, payload);
+        await apiClient.post(`${API}/admin/coupons`, payload);
         toast.success("Coupon created");
       }
       setShowForm(false); resetForm(); fetchCoupons();
@@ -67,7 +67,7 @@ const AdminCoupons = () => {
 
   const toggleCoupon = async (c) => {
     try {
-      await axios.patch(`${API}/admin/coupons/${c.id}/toggle`, { is_active: !c.is_active });
+      await apiClient.patch(`${API}/admin/coupons/${c.id}/toggle`, { is_active: !c.is_active });
       toast.success(c.is_active ? "Coupon deactivated" : "Coupon activated");
       fetchCoupons();
     } catch (e) { toast.error("Failed"); }
@@ -76,7 +76,7 @@ const AdminCoupons = () => {
   const deleteCoupon = async (id) => {
     if (!confirm("Delete coupon?")) return;
     try {
-      await axios.delete(`${API}/admin/coupons/${id}`);
+      await apiClient.delete(`${API}/admin/coupons/${id}`);
       toast.success("Coupon deleted"); fetchCoupons();
     } catch (e) { toast.error("Failed"); }
   };

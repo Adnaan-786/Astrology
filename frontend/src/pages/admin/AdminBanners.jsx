@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { Image, Plus, Edit, Trash2, ToggleLeft, ToggleRight, GripVertical, ExternalLink } from "lucide-react";
@@ -27,7 +27,7 @@ const AdminBanners = () => {
   const fetchBanners = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API}/admin/banners`);
+      const res = await apiClient.get(`${API}/admin/banners`);
       setBanners(res.data || []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
@@ -50,10 +50,10 @@ const AdminBanners = () => {
     e.preventDefault();
     try {
       if (editing) {
-        await axios.put(`${API}/admin/banners/${editing.id}`, form);
+        await apiClient.put(`${API}/admin/banners/${editing.id}`, form);
         toast.success("Banner updated");
       } else {
-        await axios.post(`${API}/admin/banners`, form);
+        await apiClient.post(`${API}/admin/banners`, form);
         toast.success("Banner created");
       }
       setShowForm(false); resetForm(); fetchBanners();
@@ -62,7 +62,7 @@ const AdminBanners = () => {
 
   const toggleBanner = async (b) => {
     try {
-      await axios.patch(`${API}/admin/banners/${b.id}/toggle`, { is_active: !b.is_active });
+      await apiClient.patch(`${API}/admin/banners/${b.id}/toggle`, { is_active: !b.is_active });
       toast.success(b.is_active ? "Banner hidden" : "Banner shown");
       fetchBanners();
     } catch (e) { toast.error("Failed"); }
@@ -71,7 +71,7 @@ const AdminBanners = () => {
   const deleteBanner = async (id) => {
     if (!confirm("Delete banner?")) return;
     try {
-      await axios.delete(`${API}/admin/banners/${id}`);
+      await apiClient.delete(`${API}/admin/banners/${id}`);
       toast.success("Banner deleted"); fetchBanners();
     } catch (e) { toast.error("Failed"); }
   };

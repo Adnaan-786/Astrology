@@ -1,12 +1,12 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, Users, Sparkles, ShoppingBag, User } from "lucide-react";
+import { Home, Sparkles, ShoppingBag, User, Sun } from "lucide-react";
 
 const MobileNav = () => {
   const location = useLocation();
   
   const navItems = [
     { name: "Home", path: "/", icon: Home },
-    { name: "Astrologers", path: "/astrologers", icon: Users },
+    { name: "Rashifal", path: "/rashifal", icon: Sun },
     { name: "AI", path: "/nakshatra-ai", icon: Sparkles },
     { name: "Store", path: "/cosmic-store", icon: ShoppingBag },
     { name: "Profile", path: "/dashboard", icon: User },

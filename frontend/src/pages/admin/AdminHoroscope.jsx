@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import {
@@ -64,6 +64,7 @@ const AdminHoroscope = () => {
 
   useEffect(() => {
     fetchHoroscopes();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
 
   useEffect(() => {
@@ -103,12 +104,13 @@ const AdminHoroscope = () => {
         compatibility_rashi: "Leo"
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRashi, horoscopes]);
 
   const fetchHoroscopes = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API}/admin/horoscopes?date=${selectedDate}`);
+      const res = await apiClient.get(`${API}/admin/horoscopes?date=${selectedDate}`);
       const dataMap = {};
       (res.data || []).forEach(h => {
         dataMap[h.rashi] = h;
@@ -133,7 +135,7 @@ const AdminHoroscope = () => {
         date: selectedDate
       };
       
-      await axios.post(`${API}/admin/horoscopes`, payload);
+      await apiClient.post(`${API}/admin/horoscopes`, payload);
       toast.success(`${rashi.name} horoscope saved!`);
       fetchHoroscopes();
     } catch (e) {
@@ -145,7 +147,7 @@ const AdminHoroscope = () => {
 
   const handlePublishAll = async () => {
     try {
-      await axios.post(`${API}/admin/horoscopes/publish-all`, { date: selectedDate });
+      await apiClient.post(`${API}/admin/horoscopes/publish-all`, { date: selectedDate });
       toast.success("All horoscopes published!");
     } catch (e) {
       toast.error("Failed to publish horoscopes");

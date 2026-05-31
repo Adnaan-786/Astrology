@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { Zap, Phone, Video, MessageSquare, Clock, Star, XCircle } from "lucide-react";
@@ -15,20 +15,21 @@ const AdminSessions = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchSessions(); }, [filter]);
 
   const fetchSessions = async () => {
     try {
       setLoading(true);
       const params = filter !== "all" ? `?status=${filter}` : "";
-      const res = await axios.get(`${API}/admin/sessions${params}`);
+      const res = await apiClient.get(`${API}/admin/sessions${params}`);
       setSessions(res.data || []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
   const endSession = async (id) => {
     try {
-      await axios.patch(`${API}/admin/sessions/${id}/end`);
+      await apiClient.patch(`${API}/admin/sessions/${id}/end`);
       toast.success("Session ended");
       fetchSessions();
     } catch (e) { toast.error("Failed to end session"); }

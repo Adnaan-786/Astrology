@@ -203,8 +203,8 @@ const UpsellModal = ({ open, onClose }) => {
   );
 };
 
-// ==================== CHAT (for paid users) ====================
-const PaidChat = () => {
+// ==================== CHAT ====================
+const AIChat = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -660,11 +660,6 @@ const ReportFlow = () => {
         <Button onClick={share} variant="outline" className="border-[#8B5CF6] text-[#8B5CF6] hover:bg-[#8B5CF6]/10 rounded-full px-6 py-5" data-testid="report-share-btn">
           <Share2 className="w-4 h-4 mr-2" /> Share
         </Button>
-        <Link to="/astrologers" className="ml-auto">
-          <Button variant="outline" className="border-[#D4A017] text-[#F5C842] hover:bg-[#D4A017]/10 rounded-full px-6 py-5" data-testid="report-consult-btn">
-            Book Live Consultation →
-          </Button>
-        </Link>
       </div>
     </div>
   );
@@ -837,6 +832,7 @@ const NorthIndianChart = ({ houses = [] }) => {
 const KundliChartTab = () => {
   const [form, setForm] = useState({ name: "", dob: "", tob: "", pob: "" });
   const [generated, setGenerated] = useState(false);
+  const [chartData, setChartData] = useState([]);
   const logged = isLoggedIn();
 
   const handleGenerate = (e) => {
@@ -845,6 +841,31 @@ const KundliChartTab = () => {
       toast.error("Please fill name, date and place of birth");
       return;
     }
+
+    // Deterministic pseudo-random generation based on birth data
+    const seedStr = `${form.dob}-${form.tob}-${form.pob}`.toLowerCase();
+    let hash = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      hash = Math.imul(31, hash) + seedStr.charCodeAt(i) | 0;
+    }
+    const random = () => {
+      hash = Math.imul(hash ^ (hash >>> 15), 1597334677);
+      return ((hash ^ (hash >>> 15)) >>> 0) / 4294967296;
+    };
+
+    const lagna = Math.floor(random() * 12) + 1;
+    const planets = ["Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa", "Ra", "Ke"];
+    const houses = Array.from({ length: 12 }, (_, i) => ({
+      rashi: ((lagna + i - 1) % 12) + 1,
+      planets: []
+    }));
+
+    planets.forEach(p => {
+      const houseIndex = Math.floor(random() * 12);
+      houses[houseIndex].planets.push(p);
+    });
+
+    setChartData(houses);
     setGenerated(true);
     toast.success("Kundli chart generated ✓");
   };
@@ -929,7 +950,7 @@ const KundliChartTab = () => {
             <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">✓ Generated</Badge>
           )}
         </div>
-        <NorthIndianChart />
+        <NorthIndianChart houses={generated ? chartData : []} />
         <div className="mt-5 grid grid-cols-3 sm:grid-cols-5 gap-2 text-[11px]">
           {[
             ["Su", "Sun"],  ["Mo", "Moon"],  ["Ma", "Mars"],  ["Me", "Mercury"], ["Ju", "Jupiter"],
@@ -1005,29 +1026,9 @@ const NakshatraAIPage = () => {
         </div>
 
         {activeTab === "chat" && (
-          paid ? (
-            <div className="max-w-3xl mx-auto">
-              <PaidChat />
-            </div>
-          ) : (
-            // Split layout: lock on left, reports grid on right
-            <div className="grid lg:grid-cols-[minmax(0,_320px)_1fr] gap-6 lg:gap-8" data-testid="chat-split-layout">
-              <SideLockCard onUpgrade={() => setUpsellOpen(true)} />
-              <div>
-                <div className="flex items-start justify-between gap-4 mb-5">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.3em] text-[#F5C842] mb-1">Astrological Reports</p>
-                    <h3 className="font-cinzel text-xl sm:text-2xl font-semibold text-white mb-1">Deep-dive into your cosmic blueprint</h3>
-                    <p className="text-sm text-zinc-400">with data-rich, AI-generated analysis.</p>
-                  </div>
-                  <Badge className="bg-[#D4A017]/15 text-[#F5C842] border border-[#D4A017]/40 px-3 py-1.5 hidden sm:inline-flex">
-                    {reportTypes.length} Reports Available
-                  </Badge>
-                </div>
-                <ReportGrid onPick={() => setActiveTab("reports")} />
-              </div>
-            </div>
-          )
+          <div className="max-w-3xl mx-auto">
+            <AIChat />
+          </div>
         )}
 
         {activeTab === "reports" && (

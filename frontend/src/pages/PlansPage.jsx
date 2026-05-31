@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { toast } from "sonner";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { 
   Check, Star, Sparkles, Crown, Zap, X
@@ -15,6 +17,95 @@ const PlansPage = () => {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isAnnual, setIsAnnual] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem("astrovedic_user");
+      if (stored) return JSON.parse(stored);
+    } catch (e) { }
+    return null;
+  });
+  const navigate = useNavigate();
+
+  const handleSubscribe = async (plan) => {
+    const userStr = localStorage.getItem("astrovedic_user");
+    if (!userStr) {
+      toast.error("Please login to subscribe to a plan");
+      navigate("/login");
+      return;
+    }
+    const user = JSON.parse(userStr);
+
+    if (plan.price_monthly === 0 || plan.slug === "free") {
+      try {
+        setSubscribing(true);
+        await apiClient.post("/plans/subscribe-free");
+        const updatedUser = { ...user, plan: "free" };
+        localStorage.setItem("astrovedic_user", JSON.stringify(updatedUser));
+        setCurrentUser(updatedUser);
+        toast.success("Successfully switched to Free plan");
+        navigate("/nakshatra-ai");
+      } catch (err) {
+        toast.error("Failed to update plan");
+      } finally {
+        setSubscribing(false);
+      }
+      return;
+    }
+
+    try {
+      setSubscribing(true);
+      const { data: orderData } = await apiClient.post("/plans/create-order", {
+        plan_slug: plan.slug,
+        is_annual: isAnnual
+      });
+
+      const options = {
+        key: "rzp_test_Ss2yfn9UjqYkwa", // Or inject via env in real setup
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "AstroVedic",
+        description: `Subscribe to ${plan.name}`,
+        order_id: orderData.order_id,
+        handler: async function (response) {
+          try {
+            await apiClient.post("/plans/verify-payment", {
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature,
+              plan_slug: plan.slug
+            });
+            const updatedUser = { ...user, plan: plan.slug };
+            localStorage.setItem("astrovedic_user", JSON.stringify(updatedUser));
+            setCurrentUser(updatedUser);
+            toast.success(`Successfully subscribed to ${plan.name}!`);
+            navigate("/nakshatra-ai");
+          } catch (err) {
+            console.error("Verification error:", err);
+            toast.error("Payment verification failed. Please contact support.");
+          }
+        },
+        prefill: {
+          name: user.name,
+          email: user.email,
+        },
+        theme: {
+          color: "#8B5CF6"
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response){
+        toast.error("Payment failed: " + response.error.description);
+      });
+      rzp.open();
+    } catch (error) {
+      console.error("Subscription init error:", error);
+      toast.error(error?.response?.data?.detail || "Failed to initiate subscription.");
+    } finally {
+      setSubscribing(false);
+    }
+  };
 
   useEffect(() => {
     fetchPlans();
@@ -96,6 +187,7 @@ const PlansPage = () => {
               const price = isAnnual ? plan.price_annual : plan.price_monthly;
               const monthlyEquivalent = isAnnual ? Math.round(plan.price_annual / 12) : plan.price_monthly;
               const isFeatured = plan.is_featured;
+              const isCurrentPlan = currentUser?.plan === plan.slug;
               
               return (
                 <Card 
@@ -142,10 +234,12 @@ const PlansPage = () => {
                     </ul>
 
                     <Button 
-                      className={`w-full ${isFeatured ? 'btn-gold' : 'btn-cosmic'}`}
+                      onClick={() => handleSubscribe(plan)}
+                      disabled={subscribing || isCurrentPlan}
+                      className={`w-full ${isCurrentPlan ? 'bg-zinc-700 text-zinc-400 hover:bg-zinc-700' : isFeatured ? 'btn-gold' : 'btn-cosmic'}`}
                       data-testid={`select-plan-${plan.slug}`}
                     >
-                      {price === 0 ? 'Get Started Free' : 'Subscribe Now'}
+                      {isCurrentPlan ? 'Current Plan' : price === 0 ? 'Get Started Free' : 'Subscribe Now'}
                     </Button>
                   </CardContent>
                 </Card>

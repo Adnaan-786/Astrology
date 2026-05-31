@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { List, User, Settings, FileText, ShoppingBag, Crown, Percent, Bell, Star, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,7 +51,7 @@ const AdminAudit = () => {
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API}/admin/audit`);
+      const res = await apiClient.get(`${API}/admin/audit`);
       setLogs(res.data || []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };

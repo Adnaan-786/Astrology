@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { Crown, Plus, Edit, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
@@ -27,7 +27,7 @@ const AdminPlans = () => {
   const fetchPlans = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API}/admin/plans`);
+      const res = await apiClient.get(`${API}/admin/plans`);
       setPlans(res.data || []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
@@ -55,10 +55,10 @@ const AdminPlans = () => {
     const payload = { ...form, features: form.features.filter(f => f.trim()), slug: form.slug || form.name.toLowerCase().replace(/\s+/g, "-") };
     try {
       if (editing) {
-        await axios.put(`${API}/admin/plans/${editing.id}`, payload);
+        await apiClient.put(`${API}/admin/plans/${editing.id}`, payload);
         toast.success("Plan updated");
       } else {
-        await axios.post(`${API}/admin/plans`, payload);
+        await apiClient.post(`${API}/admin/plans`, payload);
         toast.success("Plan created");
       }
       setShowForm(false); resetForm(); fetchPlans();
@@ -67,7 +67,7 @@ const AdminPlans = () => {
 
   const togglePlan = async (plan) => {
     try {
-      await axios.patch(`${API}/admin/plans/${plan.id}/toggle`, { is_active: !plan.is_active });
+      await apiClient.patch(`${API}/admin/plans/${plan.id}/toggle`, { is_active: !plan.is_active });
       toast.success(plan.is_active ? "Plan deactivated" : "Plan activated");
       fetchPlans();
     } catch (e) { toast.error("Failed"); }
@@ -76,7 +76,7 @@ const AdminPlans = () => {
   const deletePlan = async (id) => {
     if (!confirm("Delete this plan?")) return;
     try {
-      await axios.delete(`${API}/admin/plans/${id}`);
+      await apiClient.delete(`${API}/admin/plans/${id}`);
       toast.success("Plan deleted"); fetchPlans();
     } catch (e) { toast.error("Failed"); }
   };

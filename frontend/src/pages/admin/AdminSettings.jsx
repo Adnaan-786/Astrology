@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { Settings, Save, Upload } from "lucide-react";
@@ -38,7 +38,7 @@ const AdminSettings = () => {
 
   const fetchSettings = async () => {
     try {
-      const res = await axios.get(`${API}/admin/settings`);
+      const res = await apiClient.get(`${API}/admin/settings`);
       if (res.data) setSettings(prev => ({ ...prev, ...res.data }));
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
@@ -46,7 +46,7 @@ const AdminSettings = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await axios.put(`${API}/admin/settings`, settings);
+      await apiClient.put(`${API}/admin/settings`, settings);
       toast.success("Settings saved successfully! Changes will reflect across the website.");
     } catch (e) {
       toast.error("Failed to save settings");

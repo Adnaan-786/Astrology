@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { MessageSquare, Check, X, Flag, Trash2, Star } from "lucide-react";
@@ -20,14 +20,14 @@ const AdminReviews = () => {
   const fetchReviews = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API}/admin/reviews`);
+      const res = await apiClient.get(`${API}/admin/reviews`);
       setReviews(res.data || []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
   const approveReview = async (id, approve) => {
     try {
-      await axios.patch(`${API}/admin/reviews/${id}/approve`, { is_approved: approve });
+      await apiClient.patch(`${API}/admin/reviews/${id}/approve`, { is_approved: approve });
       toast.success(approve ? "Review approved" : "Review rejected");
       fetchReviews();
     } catch (e) { toast.error("Failed"); }
@@ -35,7 +35,7 @@ const AdminReviews = () => {
 
   const flagReview = async (id, flag) => {
     try {
-      await axios.patch(`${API}/admin/reviews/${id}/flag`, { is_flagged: flag });
+      await apiClient.patch(`${API}/admin/reviews/${id}/flag`, { is_flagged: flag });
       toast.success(flag ? "Review flagged" : "Flag removed");
       fetchReviews();
     } catch (e) { toast.error("Failed"); }
@@ -44,7 +44,7 @@ const AdminReviews = () => {
   const deleteReview = async (id) => {
     if (!confirm("Delete review?")) return;
     try {
-      await axios.delete(`${API}/admin/reviews/${id}`);
+      await apiClient.delete(`${API}/admin/reviews/${id}`);
       toast.success("Deleted"); fetchReviews();
     } catch (e) { toast.error("Failed"); }
   };

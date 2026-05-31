@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { 
   User, Wallet, Star, Clock, Heart, FileText, 
@@ -13,15 +13,55 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import apiClient from "@/lib/apiClient";
 
 const DashboardPage = () => {
-  const [user] = useState({
-    name: "Guest User",
-    email: "guest@example.com",
-    rashi: "Leo",
-    rashiHindi: "सिंह",
-    plan: "Free",
-    walletBalance: 500,
-    loginStreak: 7
+  // Initialize user from local storage
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem("astrovedic_user");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return {
+          name: parsed.name || "Guest User",
+          email: parsed.email || "guest@example.com",
+          rashi: parsed.rashi || "Leo",
+          rashiHindi: parsed.rashiHindi || "सिंह",
+          plan: parsed.plan || "Free",
+          walletBalance: parsed.wallet_balance || 500,
+          loginStreak: parsed.loginStreak || 7
+        };
+      }
+    } catch (e) {
+      console.error("Failed to parse user from local storage", e);
+    }
+    return {
+      name: "Guest User",
+      email: "guest@example.com",
+      rashi: "Leo",
+      rashiHindi: "सिंह",
+      plan: "Free",
+      walletBalance: 500,
+      loginStreak: 7
+    };
   });
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const { data } = await apiClient.get('/auth/me');
+        if (data?.user) {
+          localStorage.setItem("astrovedic_user", JSON.stringify(data.user));
+          setUser({
+            ...data.user,
+            walletBalance: data.user.wallet_balance || 0
+          });
+        }
+      } catch (e) {
+        console.error("Failed to fetch fresh user data", e);
+      }
+    };
+    if (localStorage.getItem("astrovedic_token")) {
+      fetchUser();
+    }
+  }, []);
 
   const [rechargeAmount, setRechargeAmount] = useState(499);
   const [isRecharging, setIsRecharging] = useState(false);
@@ -81,18 +121,23 @@ const DashboardPage = () => {
     { label: "Wallet Balance", value: `₹${user.walletBalance}`, icon: Wallet, color: "text-cosmic-gold" },
     { label: "Login Streak", value: `${user.loginStreak} days`, icon: TrendingUp, color: "text-green-400" },
     { label: "AI Reports", value: "3 left", icon: FileText, color: "text-cosmic-purple" },
-    { label: "Free Minutes", value: "10 mins", icon: Clock, color: "text-blue-400" },
+    { label: "Daily Rashifal", value: "Active", icon: Calendar, color: "text-blue-400" },
   ];
 
-  const recentSessions = [
-    { id: 1, astrologer: "Pandit Rajesh Sharma", type: "Chat", duration: "15 min", date: "2 days ago", amount: 375 },
-    { id: 2, astrologer: "Dr. Priya Joshi", type: "Call", duration: "10 min", date: "5 days ago", amount: 200 },
-  ];
 
-  const savedReports = [
-    { id: 1, type: "Janam Kundli", date: "Jan 15, 2025", status: "Complete" },
-    { id: 2, type: "Career Report", date: "Jan 10, 2025", status: "Complete" },
-  ];
+  const [savedReports, setSavedReports] = useState([]);
+  
+  useEffect(() => {
+    const fetchReports = async () => {
+      try {
+        const { data } = await apiClient.get('/ai/reports');
+        setSavedReports(data);
+      } catch (err) {
+        console.error("Failed to fetch reports", err);
+      }
+    };
+    fetchReports();
+  }, []);
 
   const rechargeOptions = [99, 199, 299, 499, 999, 1499];
 
@@ -165,50 +210,10 @@ const DashboardPage = () => {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            <Tabs defaultValue="sessions" className="w-full">
+            <Tabs defaultValue="reports" className="w-full">
               <TabsList className="bg-cosmic-surface w-full justify-start">
-                <TabsTrigger value="sessions" className="data-[state=active]:bg-cosmic-indigo">Sessions</TabsTrigger>
                 <TabsTrigger value="reports" className="data-[state=active]:bg-cosmic-indigo">Reports</TabsTrigger>
-                <TabsTrigger value="favorites" className="data-[state=active]:bg-cosmic-indigo">Favorites</TabsTrigger>
               </TabsList>
-
-              <TabsContent value="sessions" className="mt-4">
-                <Card className="cosmic-card">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-white">Recent Consultations</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {recentSessions.length > 0 ? (
-                      <div className="space-y-4">
-                        {recentSessions.map(session => (
-                          <div key={session.id} className="flex items-center justify-between p-3 glass rounded-lg" data-testid={`session-${session.id}`}>
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-cosmic-surface flex items-center justify-center">
-                                <User className="w-5 h-5 text-cosmic-gold" />
-                              </div>
-                              <div>
-                                <p className="text-white font-medium text-sm">{session.astrologer}</p>
-                                <p className="text-xs text-zinc-400">{session.type} • {session.duration} • {session.date}</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-cosmic-gold font-semibold">₹{session.amount}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8">
-                        <Clock className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-                        <p className="text-zinc-400">No sessions yet</p>
-                        <Link to="/astrologers">
-                          <Button className="mt-4 btn-cosmic">Book First Session</Button>
-                        </Link>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
 
               <TabsContent value="reports" className="mt-4">
                 <Card className="cosmic-card">
@@ -225,8 +230,8 @@ const DashboardPage = () => {
                                 <FileText className="w-5 h-5 text-cosmic-purple" />
                               </div>
                               <div>
-                                <p className="text-white font-medium text-sm">{report.type}</p>
-                                <p className="text-xs text-zinc-400">{report.date}</p>
+                                <p className="text-white font-medium text-sm capitalize">{report.report_type?.replace('-', ' ')}</p>
+                                <p className="text-xs text-zinc-400">{new Date(report.created_at).toLocaleDateString()}</p>
                               </div>
                             </div>
                             <Button size="sm" variant="outline" className="border-cosmic-purple/50 text-xs">
@@ -248,17 +253,6 @@ const DashboardPage = () => {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="favorites" className="mt-4">
-                <Card className="cosmic-card">
-                  <CardContent className="py-12 text-center">
-                    <Heart className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-                    <p className="text-zinc-400">No favorite astrologers yet</p>
-                    <Link to="/astrologers">
-                      <Button className="mt-4 btn-cosmic">Browse Astrologers</Button>
-                    </Link>
-                  </CardContent>
-                </Card>
-              </TabsContent>
             </Tabs>
 
             {/* Referral Section */}

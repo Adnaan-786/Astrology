@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { Bot, Trash2, Download, FileText, AlertCircle, CheckCircle, Loader } from "lucide-react";
@@ -16,7 +16,7 @@ const AdminAIReports = () => {
   const fetchReports = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API}/admin/ai-reports`);
+      const res = await apiClient.get(`${API}/admin/ai-reports`);
       setReports(res.data || []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
@@ -24,7 +24,7 @@ const AdminAIReports = () => {
   const deleteReport = async (id) => {
     if (!confirm("Delete this report?")) return;
     try {
-      await axios.delete(`${API}/admin/ai-reports/${id}`);
+      await apiClient.delete(`${API}/admin/ai-reports/${id}`);
       toast.success("Report deleted");
       fetchReports();
     } catch (e) { toast.error("Failed to delete"); }

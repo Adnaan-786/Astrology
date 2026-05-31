@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { Bell, Plus, Send, Trash2, Users, Megaphone } from "lucide-react";
@@ -24,7 +24,7 @@ const AdminNotifications = () => {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API}/admin/notifications`);
+      const res = await apiClient.get(`${API}/admin/notifications`);
       setNotifs(res.data || []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
@@ -32,7 +32,7 @@ const AdminNotifications = () => {
   const handleCreate = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/admin/notifications`, form);
+      await apiClient.post(`${API}/admin/notifications`, form);
       toast.success("Notification created");
       setShowForm(false);
       setForm({ title: "", message: "", type: "all", target: "all_users" });
@@ -42,7 +42,7 @@ const AdminNotifications = () => {
 
   const sendNotification = async (id) => {
     try {
-      const res = await axios.post(`${API}/admin/notifications/${id}/send`);
+      const res = await apiClient.post(`${API}/admin/notifications/${id}/send`);
       toast.success(`Notification sent to ${res.data.sent_count} users`);
       fetchNotifications();
     } catch (e) { toast.error("Failed to send"); }
@@ -51,7 +51,7 @@ const AdminNotifications = () => {
   const deleteNotification = async (id) => {
     if (!confirm("Delete notification?")) return;
     try {
-      await axios.delete(`${API}/admin/notifications/${id}`);
+      await apiClient.delete(`${API}/admin/notifications/${id}`);
       toast.success("Deleted"); fetchNotifications();
     } catch (e) { toast.error("Failed"); }
   };

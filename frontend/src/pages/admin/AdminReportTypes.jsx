@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import {
@@ -43,7 +43,7 @@ const AdminReportTypes = () => {
   const load = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API}/admin/report-types`);
+      const res = await apiClient.get(`${API}/admin/report-types`);
       setItems(res.data || []);
     } catch (e) { console.error(e); toast.error("Failed to load report types"); }
     finally { setLoading(false); }
@@ -68,10 +68,10 @@ const AdminReportTypes = () => {
     try {
       const payload = { ...form, price: Number(form.price) || 0, position: Number(form.position) || 99 };
       if (editing) {
-        await axios.put(`${API}/admin/report-types/${editing.id}`, payload);
+        await apiClient.put(`${API}/admin/report-types/${editing.id}`, payload);
         toast.success("Report type updated");
       } else {
-        await axios.post(`${API}/admin/report-types`, payload);
+        await apiClient.post(`${API}/admin/report-types`, payload);
         toast.success("Report type created");
       }
       setShowForm(false); reset(); load();
@@ -82,7 +82,7 @@ const AdminReportTypes = () => {
 
   const toggle = async (rt) => {
     try {
-      await axios.patch(`${API}/admin/report-types/${rt.id}/toggle`, { is_active: !rt.is_active });
+      await apiClient.patch(`${API}/admin/report-types/${rt.id}/toggle`, { is_active: !rt.is_active });
       toast.success(rt.is_active ? "Hidden" : "Visible");
       load();
     } catch (e) { toast.error("Failed"); }
@@ -91,7 +91,7 @@ const AdminReportTypes = () => {
   const remove = async (id) => {
     if (!window.confirm("Delete this report type? Users won't be able to buy it anymore.")) return;
     try {
-      await axios.delete(`${API}/admin/report-types/${id}`);
+      await apiClient.delete(`${API}/admin/report-types/${id}`);
       toast.success("Deleted");
       load();
     } catch (e) { toast.error("Failed to delete"); }

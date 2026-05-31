@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { Wallet, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,7 @@ const AdminFinance = () => {
   const fetchFinance = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API}/admin/finance`);
+      const res = await apiClient.get(`${API}/admin/finance`);
       setData(res.data || { transactions: [], summary: {} });
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };

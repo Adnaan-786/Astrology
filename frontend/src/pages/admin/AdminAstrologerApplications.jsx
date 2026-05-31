@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import {
@@ -34,7 +34,7 @@ export const AdminAstrologerApplications = () => {
       const params = {};
       if (statusFilter !== "all") params.status = statusFilter;
       if (search.trim()) params.search = search.trim();
-      const res = await axios.get(`${API}/admin/astrologer-applications`, { params });
+      const res = await apiClient.get(`${API}/admin/astrologer-applications`, { params });
       setData(res.data);
     } catch (e) {
       toast.error("Failed to load applications");
@@ -42,11 +42,12 @@ export const AdminAstrologerApplications = () => {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [statusFilter]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [statusFilter]);
 
   const quickAction = async (id, action) => {
     try {
-      await axios.patch(`${API}/admin/astrologer-applications/${id}`, {
+      await apiClient.patch(`${API}/admin/astrologer-applications/${id}`, {
         status: action,
         admin_notes: action === "approved" ? "Approved via quick action" : "Rejected via quick action",
       });
@@ -252,6 +253,7 @@ function ApplicationDetailDialog({ application, onClose, onUpdated }) {
       setRejectReason(REJECT_REASONS[0]);
       setRejectNotes("");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [application]);
 
   if (!application) return null;
@@ -265,7 +267,7 @@ function ApplicationDetailDialog({ application, onClose, onUpdated }) {
   const submit = async (status, extra = {}) => {
     setSaving(true);
     try {
-      await axios.patch(`${API}/admin/astrologer-applications/${application.id}`, {
+      await apiClient.patch(`${API}/admin/astrologer-applications/${application.id}`, {
         status,
         admin_notes: notes,
         ...extra,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
 import {
@@ -56,7 +56,7 @@ const AdminAstrologers = () => {
   const fetchAstrologers = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API}/astrologers`);
+      const res = await apiClient.get(`${API}/astrologers`);
       setAstrologers(res.data);
     } catch (e) {
       console.error("Error fetching astrologers:", e);
@@ -69,10 +69,10 @@ const AdminAstrologers = () => {
     e.preventDefault();
     try {
       if (editingAstrologer) {
-        await axios.put(`${API}/admin/astrologers/${editingAstrologer.id}`, formData);
+        await apiClient.put(`${API}/admin/astrologers/${editingAstrologer.id}`, formData);
         toast.success("Astrologer updated successfully");
       } else {
-        await axios.post(`${API}/admin/astrologers`, formData);
+        await apiClient.post(`${API}/admin/astrologers`, formData);
         toast.success("Astrologer added successfully");
       }
       setShowForm(false);
@@ -104,7 +104,7 @@ const AdminAstrologers = () => {
   const handleDelete = async (id) => {
     if (!confirm("Are you sure you want to delete this astrologer?")) return;
     try {
-      await axios.delete(`${API}/admin/astrologers/${id}`);
+      await apiClient.delete(`${API}/admin/astrologers/${id}`);
       toast.success("Astrologer deleted");
       fetchAstrologers();
     } catch (e) {
@@ -114,7 +114,7 @@ const AdminAstrologers = () => {
 
   const toggleOnlineStatus = async (id, currentStatus) => {
     try {
-      await axios.patch(`${API}/admin/astrologers/${id}/status`, { is_online: !currentStatus });
+      await apiClient.patch(`${API}/admin/astrologers/${id}/status`, { is_online: !currentStatus });
       toast.success("Status updated");
       fetchAstrologers();
     } catch (e) {

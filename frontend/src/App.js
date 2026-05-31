@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 // Pages
 import HomePage from "@/pages/HomePage";
-import AstrologersPage from "@/pages/AstrologersPage";
+
 import NakshatraAIPage from "@/pages/NakshatraAIPage";
 import CosmicStorePage from "@/pages/CosmicStorePage";
 import RashifalPage from "@/pages/RashifalPage";
@@ -15,7 +15,7 @@ import PlansPage from "@/pages/PlansPage";
 import DashboardPage from "@/pages/DashboardPage";
 import BlogPage from "@/pages/BlogPage";
 import AuthPage from "@/pages/AuthPage";
-import ApplyAstrologerPage from "@/pages/ApplyAstrologerPage";
+
 import OnboardingPage from "@/pages/OnboardingPage";
 import ProfilePage from "@/pages/ProfilePage";
 
@@ -144,11 +144,11 @@ function App() {
               <PublicLayout>
                 <Routes>
                   <Route path="/" element={<HomePage />} />
-                  <Route path="/astrologers" element={<AstrologersPage />} />
+
                   <Route path="/nakshatra-ai" element={<NakshatraAIPage />} />
                   <Route path="/cosmic-store" element={<CosmicStorePage />} />
                   <Route path="/rashifal" element={<RashifalPage />} />
-                  <Route path="/apply-astrologer" element={<ApplyAstrologerPage />} />
+
                   <Route path="/plans" element={<PlansPage />} />
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/blog" element={<BlogPage />} />
