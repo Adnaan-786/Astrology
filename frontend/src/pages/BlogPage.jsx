@@ -138,9 +138,11 @@ const BlogPage = () => {
                         {featuredPost.views.toLocaleString()} views
                       </span>
                     </div>
-                    <Button className="btn-gold w-fit" data-testid="read-featured">
-                      Read Article <ChevronRight className="w-4 h-4 ml-2" />
-                    </Button>
+                    <Link to={`/blog/${featuredPost.slug}`}>
+                      <Button className="btn-gold w-fit" data-testid="read-featured">
+                        Read Article <ChevronRight className="w-4 h-4 ml-2" />
+                      </Button>
+                    </Link>
                   </CardContent>
                 </div>
               </Card>
@@ -150,34 +152,36 @@ const BlogPage = () => {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {otherPosts.map(post => (
                 <Card key={post.id} className="cosmic-card overflow-hidden group" data-testid={`post-${post.id}`}>
-                  <CardContent className="p-0">
-                    <div className="relative aspect-video overflow-hidden">
-                      <img 
-                        src={post.cover_image} 
-                        alt={post.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                      <Badge className="absolute top-3 left-3 bg-cosmic-indigo/80">
-                        {post.category}
-                      </Badge>
-                    </div>
-                    <div className="p-5">
-                      <h3 className="font-cinzel font-semibold text-white mb-2 line-clamp-2 group-hover:text-cosmic-gold transition-colors">
-                        {post.title}
-                      </h3>
-                      <p className="text-sm text-zinc-400 mb-4 line-clamp-2">{post.excerpt}</p>
-                      <div className="flex items-center justify-between text-xs text-zinc-500">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {post.reading_time} min
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Eye className="w-3 h-3" />
-                          {post.views.toLocaleString()}
-                        </span>
+                  <Link to={`/blog/${post.slug}`} className="block h-full">
+                    <CardContent className="p-0">
+                      <div className="relative aspect-video overflow-hidden">
+                        <img 
+                          src={post.cover_image} 
+                          alt={post.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <Badge className="absolute top-3 left-3 bg-cosmic-indigo/80">
+                          {post.category}
+                        </Badge>
                       </div>
-                    </div>
-                  </CardContent>
+                      <div className="p-5">
+                        <h3 className="font-cinzel font-semibold text-white mb-2 line-clamp-2 group-hover:text-cosmic-gold transition-colors">
+                          {post.title}
+                        </h3>
+                        <p className="text-sm text-zinc-400 mb-4 line-clamp-2">{post.excerpt}</p>
+                        <div className="flex items-center justify-between text-xs text-zinc-500">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {post.reading_time} min
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Eye className="w-3 h-3" />
+                            {post.views.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Link>
                 </Card>
               ))}
             </div>

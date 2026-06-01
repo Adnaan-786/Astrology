@@ -60,7 +60,7 @@ const HomePage = () => {
       <section className="relative min-h-[92vh] flex items-center overflow-hidden pt-20 lg:pt-24" data-testid="hero-section">
         <div
           className="absolute inset-0 bg-cover bg-center opacity-50 dark:opacity-50"
-          style={{ backgroundImage: `url('https://static.prod-images.emergentagent.com/jobs/5ecc4984-e648-4ae0-836b-e08a5ba25ebc/images/84c57b358c78663de3e10b5f0cd947ef7d1a165dbf9e26bc7aac9d4efaaf5462.png')` }}
+          style={{ backgroundImage: `url('/images/leo_sign.png')` }}
         />
         <div className="absolute inset-0 dark:bg-gradient-to-r dark:from-[#0D0B1E] dark:via-[#0D0B1E]/85 dark:to-transparent bg-gradient-to-r from-white/95 via-white/80 to-white/30" />
 

@@ -14,6 +14,7 @@ import RashifalPage from "@/pages/RashifalPage";
 import PlansPage from "@/pages/PlansPage";
 import DashboardPage from "@/pages/DashboardPage";
 import BlogPage from "@/pages/BlogPage";
+import BlogPostPage from "@/pages/BlogPostPage";
 import AuthPage from "@/pages/AuthPage";
 
 import OnboardingPage from "@/pages/OnboardingPage";
@@ -152,6 +153,7 @@ function App() {
                   <Route path="/plans" element={<PlansPage />} />
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/blog" element={<BlogPage />} />
+                  <Route path="/blog/:slug" element={<BlogPostPage />} />
                   <Route path="/login" element={<AuthPage mode="login" />} />
                   <Route path="/signup" element={<AuthPage mode="signup" />} />
                   <Route path="/onboarding" element={<OnboardingPage />} />
