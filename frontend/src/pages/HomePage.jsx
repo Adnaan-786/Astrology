@@ -13,7 +13,7 @@ import BannerCarousel from "@/components/BannerCarousel";
 
 // ---- Data ----
 const OFFERINGS = [
-  { icon: Sparkles,     title: "AI Reports (Paid)",  desc: "Detailed kundli reports & predictions powered by AI.", link: "/nakshatra-ai",  cta: "View Reports",  color: "from-[#3B82F6] to-[#1E40AF]", ring: "#3B82F6" },
+  { icon: Sparkles,     title: "AI Reports (Paid)",  desc: "Detailed kundli reports & predictions powered by AI.", link: "/nakshatra-ai?tab=reports",  cta: "View Reports",  color: "from-[#3B82F6] to-[#1E40AF]", ring: "#3B82F6" },
   { icon: ShoppingBag,  title: "Cosmic Store",       desc: "Shop authentic gemstones, rudraksha, yantras & more.", link: "/cosmic-store",  cta: "Shop Now",      color: "from-[#10B981] to-[#047857]", ring: "#10B981" },
   { icon: Sun,          title: "Daily Rashifal",     desc: "Read your daily horoscope free in Hindi & English.", link: "/rashifal",      cta: "Read Now",      color: "from-[#F59E0B] to-[#B45309]", ring: "#F59E0B" },
 ];
@@ -157,7 +157,7 @@ const HomePage = () => {
                   </li>
                 ))}
               </ul>
-              <Link to="/nakshatra-ai">
+              <Link to="/nakshatra-ai?tab=reports">
                 <Button className="btn-gold rounded-full px-6 py-5" data-testid="view-all-reports-btn">
                   View All Reports <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
@@ -191,7 +191,7 @@ const HomePage = () => {
                       </li>
                     ))}
                   </ul>
-                  <Link to="/nakshatra-ai">
+                  <Link to="/nakshatra-ai?tab=reports">
                     <Button className={`w-full rounded-full ${t.btn}`} data-testid={`generate-${t.id}-btn`}>
                       Generate Now
                     </Button>
