@@ -338,11 +338,13 @@ const PlansPage = () => {
               <Link to="/nakshatra-ai">
                 <Button className="btn-gold px-8">Start Free Trial</Button>
               </Link>
+              {/*
               <Link to="/astrologers">
                 <Button variant="outline" className="border-cosmic-purple/50 px-8">
                   Talk to an Astrologer
                 </Button>
               </Link>
+              */}
             </div>
           </div>
         </div>
