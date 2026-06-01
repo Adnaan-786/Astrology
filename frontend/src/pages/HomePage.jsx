@@ -20,13 +20,13 @@ const OFFERINGS = [
 
 const REPORT_TIERS = [
   {
-    name: "Basic Report",   price: 99,   id: "kundli-basic",
-    features: ["Kundli Overview", "Basic Predictions", "PDF Download"],
+    name: "Basic Report",   price: 0,   id: "kundli-basic",
+    features: ["Kundli Overview", "Basic Predictions", "Online View"],
     tone: "text-[#8B5CF6]", btn: "bg-[#8B5CF6] hover:bg-[#7C3AED] text-white",
     bg: "from-[#231F3A] to-[#1A1730]", border: "border-[#8B5CF6]/30",
   },
   {
-    name: "Detailed Report", price: 199, id: "kundli-detailed", popular: true,
+    name: "Detailed Report", price: 99, id: "kundli-detailed", popular: true,
     features: ["Life Predictions", "Career & Finance", "Love & Relationships", "Remedies", "PDF Download"],
     tone: "text-[#F5C842]", btn: "btn-gold",
     bg: "from-[#2D1B69] to-[#1A1730]", border: "border-[#D4A017]",
