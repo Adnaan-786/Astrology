@@ -271,7 +271,12 @@ const PlansPage = () => {
                   { name: "AI Reports/Month", key: "ai_reports_per_month", format: (v) => v === -1 ? "Unlimited" : v },
                   { name: "Free Consultation Minutes", key: "free_chat_minutes", format: (v) => v || "0" },
                   { name: "Store Discount", key: "discount_on_products", format: (v) => v ? `${v}%` : "-" },
-                  { name: "AI Chat", key: null, values: ["5 msg/day", "30 msg/day", "Unlimited", "Unlimited"] },
+                  { name: "AI Chat", key: "ai_chat_messages_limit", format: (v, plan) => {
+                    if (v === -1) return "Unlimited";
+                    const period = plan?.ai_chat_limit_period || "day";
+                    const periodLabel = period === "month" ? "mo" : period === "lifetime" ? "lifetime" : "day";
+                    return `${v} msg/${periodLabel}`;
+                  }},
                   { name: "Video Calls", key: null, values: ["-", "-", "✓", "✓"] },
                   { name: "Priority Support", key: null, values: ["-", "✓", "✓", "✓"] },
                   { name: "Dedicated Astrologer", key: null, values: ["-", "-", "-", "✓"] },
@@ -280,7 +285,7 @@ const PlansPage = () => {
                     <td className="py-4 text-zinc-300 text-sm">{row.name}</td>
                     {plans.map((plan, pidx) => (
                       <td key={plan.id} className="text-center py-4 text-white text-sm">
-                        {row.key ? row.format(plan[row.key]) : row.values[pidx]}
+                        {row.key ? row.format(plan[row.key], plan) : row.values[pidx]}
                       </td>
                     ))}
                   </tr>

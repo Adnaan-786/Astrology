@@ -205,6 +205,8 @@ class Plan(BaseModel):
     ai_reports_per_month: int = 0
     free_chat_minutes: int = 0
     discount_on_products: int = 0
+    ai_chat_messages_limit: int = 5        # -1 = unlimited
+    ai_chat_limit_period: str = "day"      # "day", "month", "lifetime"
     is_active: bool = True
     is_featured: bool = False
     color: str = "#8B5CF6"
@@ -469,46 +471,94 @@ class ChatResponse(BaseModel):
     response: str
     session_id: str
 
+def _get_chat_period_key(period: str, user_id: str) -> dict:
+    """Return the query filter for chat_usage based on the configured period."""
+    now = datetime.now(timezone.utc)
+    if period == "month":
+        return {"user_id": user_id, "period_key": now.strftime("%Y-%m")}
+    elif period == "lifetime":
+        return {"user_id": user_id, "period_key": "lifetime"}
+    else:  # default: day
+        return {"user_id": user_id, "period_key": now.strftime("%Y-%m-%d")}
+
+def _period_label(period: str) -> str:
+    return {"day": "daily", "month": "monthly", "lifetime": "lifetime"}.get(period, "daily")
+
 @api_router.post("/ai/chat", response_model=ChatResponse)
 async def ai_chat(request: ChatRequest, user: dict = Depends(require_auth)):
-    plan = user.get("plan", "free")
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    plan_slug = user.get("plan", "free")
 
+    # Fetch the plan configuration from DB so admin changes take effect immediately
+    plan_doc = await db.plans.find_one({"slug": plan_slug, "is_active": True}, {"_id": 0})
+    if not plan_doc:
+        # Fallback for free plan if somehow missing
+        plan_doc = {"ai_chat_messages_limit": 5, "ai_chat_limit_period": "day"}
+
+    chat_limit = plan_doc.get("ai_chat_messages_limit", 5)
+    limit_period = plan_doc.get("ai_chat_limit_period", "day")
+
+    # Select AI model based on plan tier
     model = OPENROUTER_GROQ_MODEL
     api_key = OPENROUTER_API_KEY_GROQ
+    if plan_slug in ["silver", "gold", "platinum"]:
+        model = OPENROUTER_GEMINI_MODEL
+        api_key = OPENROUTER_API_KEY_GEMINI
 
-    if plan == "free":
-        usage = await db.chat_usage.find_one({"user_id": user["id"], "date": today}, {"_id": 0})
+    # Enforce chat limit (skip if unlimited = -1)
+    if chat_limit != -1:
+        usage_filter = _get_chat_period_key(limit_period, user["id"])
+        usage = await db.chat_usage.find_one(usage_filter, {"_id": 0})
         count = usage.get("count", 0) if usage else 0
-        if count >= 5:
+        if count >= chat_limit:
+            period_label = _period_label(limit_period)
             raise HTTPException(
                 status_code=429,
-                detail={"error": "DAILY_LIMIT_REACHED", "message": "Free tier limit of 5 messages/day reached. Upgrade to a paid plan for more access."}
+                detail={
+                    "error": "CHAT_LIMIT_REACHED",
+                    "message": f"You've reached your {period_label} limit of {chat_limit} messages. Upgrade your plan for more access.",
+                    "limit": chat_limit,
+                    "period": limit_period,
+                    "used": count,
+                }
             )
-    elif plan == "silver":
-        model = OPENROUTER_GEMINI_MODEL
-        api_key = OPENROUTER_API_KEY_GEMINI
-        usage = await db.chat_usage.find_one({"user_id": user["id"], "date": today}, {"_id": 0})
-        count = usage.get("count", 0) if usage else 0
-        if count >= 30:
-            raise HTTPException(
-                status_code=429,
-                detail={"error": "DAILY_LIMIT_REACHED", "message": "You've reached your daily 30-message limit. Upgrade to Gold or Platinum for unlimited chat."}
-            )
-    elif plan in ["gold", "platinum"]:
-        model = OPENROUTER_GEMINI_MODEL
-        api_key = OPENROUTER_API_KEY_GEMINI
-    
-    # Increment count for free/silver
-    if plan in ["free", "silver"]:
+
+    # Increment usage counter
+    if chat_limit != -1:
+        usage_filter = _get_chat_period_key(limit_period, user["id"])
         await db.chat_usage.update_one(
-            {"user_id": user["id"], "date": today},
+            usage_filter,
             {"$inc": {"count": 1}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
             upsert=True,
         )
 
     response = await get_ai_response(request.session_id, request.message, model, api_key)
     return ChatResponse(response=response, session_id=request.session_id)
+
+@api_router.get("/ai/chat-usage")
+async def get_chat_usage(user: dict = Depends(require_auth)):
+    """Return the user's current chat usage and limit info so the frontend can display it."""
+    plan_slug = user.get("plan", "free")
+    plan_doc = await db.plans.find_one({"slug": plan_slug, "is_active": True}, {"_id": 0})
+    if not plan_doc:
+        plan_doc = {"ai_chat_messages_limit": 5, "ai_chat_limit_period": "day"}
+
+    chat_limit = plan_doc.get("ai_chat_messages_limit", 5)
+    limit_period = plan_doc.get("ai_chat_limit_period", "day")
+
+    used = 0
+    if chat_limit != -1:
+        usage_filter = _get_chat_period_key(limit_period, user["id"])
+        usage = await db.chat_usage.find_one(usage_filter, {"_id": 0})
+        used = usage.get("count", 0) if usage else 0
+
+    return {
+        "plan": plan_slug,
+        "limit": chat_limit,
+        "period": limit_period,
+        "used": used,
+        "remaining": max(0, chat_limit - used) if chat_limit != -1 else -1,
+        "unlimited": chat_limit == -1,
+    }
 
 
 # ==================== AI REPORTS ====================
@@ -1850,10 +1900,10 @@ async def seed_data(_admin: dict = Depends(require_admin)):
         })
 
     plans_data = [
-        {"id": str(uuid.uuid4()), "name": "Nakshatra Free", "slug": "free", "description": "Start your cosmic journey", "price_monthly": 0, "price_annual": 0, "features": ["1 Basic Kundli Report", "5 AI Chat Messages/Day", "Daily Horoscope", "Browse Astrologers"], "ai_reports_per_month": 1, "free_chat_minutes": 0, "discount_on_products": 0, "is_active": True, "is_featured": False, "color": "#6B7280", "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": str(uuid.uuid4()), "name": "Tara Silver", "slug": "silver", "description": "Enhanced features for regular seekers", "price_monthly": 199, "price_annual": 1599, "features": ["3 AI Reports/Month", "30 AI Chat Messages/Day", "10 Free Minutes", "5% Store Discount", "Priority Support"], "ai_reports_per_month": 3, "free_chat_minutes": 10, "discount_on_products": 5, "is_active": True, "is_featured": False, "color": "#9CA3AF", "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": str(uuid.uuid4()), "name": "Graha Gold", "slug": "gold", "description": "Premium features for enthusiasts", "price_monthly": 499, "price_annual": 3999, "features": ["10 AI Reports/Month", "Unlimited AI Chat", "30 Free Minutes", "15% Store Discount", "Video Call", "Gold Badge", "Annual Report"], "ai_reports_per_month": 10, "free_chat_minutes": 30, "discount_on_products": 15, "is_active": True, "is_featured": True, "color": "#D4A017", "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": str(uuid.uuid4()), "name": "Jyotish Platinum", "slug": "platinum", "description": "Ultimate cosmic experience", "price_monthly": 999, "price_annual": 7999, "features": ["Unlimited AI Reports", "Unlimited AI Chat", "60 Free Minutes/Month", "25% Store Discount", "Free Shipping", "Dedicated Astrologer", "Monthly Live Session", "Platinum Badge", "Priority Queue"], "ai_reports_per_month": -1, "free_chat_minutes": 60, "discount_on_products": 25, "is_active": True, "is_featured": False, "color": "#8B5CF6", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": str(uuid.uuid4()), "name": "Nakshatra Free", "slug": "free", "description": "Start your cosmic journey", "price_monthly": 0, "price_annual": 0, "features": ["1 Basic Kundli Report", "5 AI Chat Messages/Day", "Daily Horoscope", "Browse Astrologers"], "ai_reports_per_month": 1, "free_chat_minutes": 0, "discount_on_products": 0, "ai_chat_messages_limit": 5, "ai_chat_limit_period": "day", "is_active": True, "is_featured": False, "color": "#6B7280", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": str(uuid.uuid4()), "name": "Tara Silver", "slug": "silver", "description": "Enhanced features for regular seekers", "price_monthly": 199, "price_annual": 1599, "features": ["3 AI Reports/Month", "30 AI Chat Messages/Day", "10 Free Minutes", "5% Store Discount", "Priority Support"], "ai_reports_per_month": 3, "free_chat_minutes": 10, "discount_on_products": 5, "ai_chat_messages_limit": 30, "ai_chat_limit_period": "day", "is_active": True, "is_featured": False, "color": "#9CA3AF", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": str(uuid.uuid4()), "name": "Graha Gold", "slug": "gold", "description": "Premium features for enthusiasts", "price_monthly": 499, "price_annual": 3999, "features": ["10 AI Reports/Month", "Unlimited AI Chat", "30 Free Minutes", "15% Store Discount", "Video Call", "Gold Badge", "Annual Report"], "ai_reports_per_month": 10, "free_chat_minutes": 30, "discount_on_products": 15, "ai_chat_messages_limit": -1, "ai_chat_limit_period": "day", "is_active": True, "is_featured": True, "color": "#D4A017", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": str(uuid.uuid4()), "name": "Jyotish Platinum", "slug": "platinum", "description": "Ultimate cosmic experience", "price_monthly": 999, "price_annual": 7999, "features": ["Unlimited AI Reports", "Unlimited AI Chat", "60 Free Minutes/Month", "25% Store Discount", "Free Shipping", "Dedicated Astrologer", "Monthly Live Session", "Platinum Badge", "Priority Queue"], "ai_reports_per_month": -1, "free_chat_minutes": 60, "discount_on_products": 25, "ai_chat_messages_limit": -1, "ai_chat_limit_period": "day", "is_active": True, "is_featured": False, "color": "#8B5CF6", "created_at": datetime.now(timezone.utc).isoformat()},
     ]
 
     blog_data = [

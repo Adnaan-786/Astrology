@@ -209,8 +209,18 @@ const AIChat = () => {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sessionId] = useState(() => `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`);
+  const [chatUsage, setChatUsage] = useState(null);
   const endRef = useRef(null);
   const user = getUser() || {};
+
+  const fetchChatUsage = async () => {
+    try {
+      const res = await apiClient.get("/ai/chat-usage");
+      setChatUsage(res.data);
+    } catch {
+      // silently fail
+    }
+  };
 
   useEffect(() => {
     setMessages([{
@@ -218,6 +228,7 @@ const AIChat = () => {
       content: "Namaste! 🙏 I am NakshatraAI, your Vedic astrology guide.\n\nShare your Date of Birth, Time of Birth, and Place of Birth for personalised insights, or ask me anything about Kundli, Dasha, gemstones, muhurta & more.",
       ts: new Date().toISOString(),
     }]);
+    fetchChatUsage();
   }, []);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
@@ -234,10 +245,14 @@ const AIChat = () => {
         message: text,
       });
       setMessages((m) => [...m, { role: "assistant", content: res.data.response, ts: new Date().toISOString() }]);
+      // Refresh usage after successful send
+      fetchChatUsage();
     } catch (e) {
       const detail = e?.response?.data?.detail;
       const msg = detail?.message || "Something went wrong. Please try again.";
       toast.error(msg);
+      // Refresh usage on limit error too
+      if (e?.response?.status === 429) fetchChatUsage();
     } finally {
       setLoading(false);
     }
@@ -249,6 +264,13 @@ const AIChat = () => {
     "What is Mangal Dosha?",
     "Best muhurta for marriage?",
   ];
+
+  const usageLabel = (() => {
+    if (!chatUsage) return null;
+    if (chatUsage.unlimited) return "Unlimited messages";
+    const periodMap = { day: "today", month: "this month", lifetime: "total" };
+    return `${chatUsage.remaining} of ${chatUsage.limit} messages left ${periodMap[chatUsage.period] || "today"}`;
+  })();
 
   return (
     <Card className="glass border-[#2D1B69] overflow-hidden" data-testid="paid-chat-container">
@@ -314,6 +336,15 @@ const AIChat = () => {
         )}
 
         <div className="p-4 border-t border-white/10">
+          {usageLabel && (
+            <p className={`text-[11px] mb-2 text-center ${
+              chatUsage && !chatUsage.unlimited && chatUsage.remaining <= 2
+                ? "text-amber-400"
+                : "text-zinc-500"
+            }`}>
+              {usageLabel}
+            </p>
+          )}
           <div className="flex gap-2">
             <Input
               value={input}
