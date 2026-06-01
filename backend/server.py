@@ -733,6 +733,26 @@ async def get_user_ai_reports(current_user: dict = Depends(require_auth)):
     ).sort("created_at", -1).to_list(50)
     return reports
 
+@api_router.get("/ai/reports/{report_id}")
+async def get_single_report(report_id: str, current_user: dict = Depends(require_auth)):
+    """Fetch a single report including its content (for download)."""
+    report = await db.ai_reports.find_one(
+        {"id": report_id, "user_id": current_user["id"]},
+        {"_id": 0}
+    )
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return report
+
+@api_router.get("/wallet/my-transactions")
+async def get_user_transactions(current_user: dict = Depends(require_auth)):
+    """Return the current user's wallet transactions."""
+    transactions = await db.wallet_transactions.find(
+        {"user_id": current_user["id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return transactions
+
 @api_router.get("/ai/chat/{session_id}")
 async def get_chat_history(session_id: str):
     session = await db.ai_chat_sessions.find_one({"session_id": session_id}, {"_id": 0})
