@@ -9,7 +9,7 @@ const DEFAULT_BANNER = {
   title: "Get Your Free Kundli Today",
   subtitle: "Discover your cosmic blueprint with AI-powered Vedic astrology",
   image_url: "",
-  link: "/nakshatra-ai",
+  link: "/nakshatra-ai?tab=chart",
   button_text: "Get Free Kundli",
   bg_color: "linear-gradient(135deg, #2D1B69 0%, #8B5CF6 50%, #D4A017 100%)",
 };
