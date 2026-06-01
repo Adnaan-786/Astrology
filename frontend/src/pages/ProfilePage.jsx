@@ -77,6 +77,23 @@ const ProfilePage = () => {
     );
   }
 
+  if (!loading && !user) {
+    return (
+      <div className="min-h-screen av-bg flex flex-col items-center justify-center p-4">
+        <div className="av-surface av-card-border rounded-2xl p-8 text-center max-w-md w-full">
+          <div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#D4A017] to-[#F5C842] rounded-full flex items-center justify-center mb-6">
+            <User className="w-8 h-8 text-[#0D0B1E]" />
+          </div>
+          <h2 className="font-cinzel text-2xl text-white mb-3">Please Login</h2>
+          <p className="text-zinc-400 mb-6 text-sm">You need to be logged in to view and edit your profile details.</p>
+          <Button onClick={() => navigate("/login")} className="bg-gradient-to-r from-[#D4A017] to-[#F5C842] text-[#0D0B1E] font-semibold rounded-full px-8 w-full">
+            Login Now
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen av-bg pt-20 lg:pt-24 pb-24">
       {/* Header */}

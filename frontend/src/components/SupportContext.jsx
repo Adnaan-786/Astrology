@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import SupportTicketModal from "@/components/SupportTicketModal";
 import { Headset } from "lucide-react";
@@ -48,12 +49,15 @@ export const useSupport = () => {
 /* Floating support button — replaces the old WhatsApp float */
 export const SupportFloatingButton = () => {
   const { openSupport } = useSupport();
+  const location = useLocation();
+  const isNakshatraAIPage = location.pathname === "/nakshatra-ai";
+
   return (
     <button
       onClick={openSupport}
       aria-label="Raise support ticket"
       data-testid="support-float-btn"
-      className="fixed right-4 bottom-24 lg:bottom-16 z-[70] group"
+      className={`fixed right-4 bottom-24 lg:bottom-16 z-[70] group ${isNakshatraAIPage ? "hidden md:inline-block" : ""}`}
     >
       <span className="absolute right-16 top-1/2 -translate-y-1/2 whitespace-nowrap px-3 py-1.5 rounded-lg bg-[#0D0B1E] border border-[#D4A017]/40 text-white text-xs shadow-lg opacity-0 translate-x-2 pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 transition-all">
         Need help? Raise a ticket

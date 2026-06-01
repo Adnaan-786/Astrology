@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import apiClient from "@/lib/apiClient";
 
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import {
@@ -981,7 +981,12 @@ const KundliChartTab = () => {
 // ==================== MAIN PAGE ====================
 const NakshatraAIPage = () => {
   const [upsellOpen, setUpsellOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("chat");
+  
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const defaultTab = queryParams.get("tab") || "chat";
+  
+  const [activeTab, setActiveTab] = useState(defaultTab);
   const paid = isPaid();
   const reportTypes = useReportTypes();
 

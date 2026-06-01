@@ -234,19 +234,7 @@ const CosmicStorePage = () => {
           </TabsList>
         </Tabs>
 
-        {/* Trust Badges */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          {[
-            { icon: Shield, text: "100% Authentic" },
-            { icon: Truck, text: "Free Shipping ₹500+" },
-            { icon: Package, text: "Easy Returns" },
-          ].map((badge, idx) => (
-            <div key={idx} className="flex items-center justify-center gap-2 py-3 glass rounded-lg">
-              <badge.icon className="w-4 h-4 text-cosmic-gold" />
-              <span className="text-xs sm:text-sm text-zinc-300">{badge.text}</span>
-            </div>
-          ))}
-        </div>
+        {/* Trust Badges removed per user request */}
 
         {/* Products Grid */}
         {loading ? (

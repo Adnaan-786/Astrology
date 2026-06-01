@@ -48,7 +48,7 @@ const BannerCarousel = ({ page = "home", showDefault = true }) => {
     return (
       <section className="py-6" data-testid="banner-section-loading">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="h-40 sm:h-52 rounded-2xl shimmer" />
+          <div className="h-[220px] sm:h-52 rounded-2xl shimmer" />
         </div>
       </section>
     );
@@ -76,7 +76,7 @@ const BannerCarousel = ({ page = "home", showDefault = true }) => {
                   key={b.id || idx}
                   to={href.startsWith("http") ? "#" : href}
                   onClick={(e) => { if (href.startsWith("http")) { e.preventDefault(); window.open(href, "_blank"); } }}
-                  className="relative min-w-full h-40 sm:h-52 md:h-60 flex items-center overflow-hidden"
+                  className="relative min-w-full h-[220px] sm:h-52 md:h-60 flex items-center overflow-hidden"
                   style={{ background: bg }}
                   data-testid={`banner-slide-${idx}`}
                 >

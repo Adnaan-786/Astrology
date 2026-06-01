@@ -15,8 +15,6 @@ import { Headset, Paperclip, X, Loader2, CheckCircle2 } from "lucide-react";
 const CATEGORIES = [
   { value: "payment",    label: "💳 Payment & Wallet" },
   { value: "technical",  label: "🛠️ Technical Issue" },
-  { value: "astrologer", label: "🔮 Astrologer / Consultation" },
-  { value: "refund",     label: "↩️ Refund Request" },
   { value: "general",    label: "💬 General Question" },
   { value: "other",      label: "📝 Other" },
 ];
