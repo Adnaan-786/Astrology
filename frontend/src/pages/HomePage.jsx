@@ -44,7 +44,6 @@ const FAQS = [
   { q: "Are AI reports accurate?",               a: "Our AI engine is trained on classical Vedic astrology texts and uses your exact planetary positions. The accuracy is on-par with a seasoned human astrologer for standard predictions. For nuanced life guidance, we recommend pairing it with a live astrologer consultation." },
   { q: "How do I use NakshatraAI?",        a: "Visit the NakshatraAI page, choose from AI Chat or AI Reports. Enter your birth details and get personalized Vedic astrology insights instantly. Free Kundli chart is included for all users." },
   { q: "Is my information safe with AstroVedic AI?", a: "Absolutely. Your birth data is encrypted, never shared, and used only to generate your personal readings. Payments are secured via PCI-DSS certified gateways. You can delete your data any time from the dashboard." },
-  { q: "Can I get a refund?",                    a: "Yes. If you are unsatisfied with any consultation, raise a support ticket within 48 hours and we will refund your wallet in full. Digital reports are non-refundable once downloaded." },
 ];
 
 // ---- Page ----
