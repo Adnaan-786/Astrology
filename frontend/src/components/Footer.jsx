@@ -11,10 +11,9 @@ const Footer = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 md:grid-cols-6 gap-8 mb-10">
           <div className="col-span-2">
-            <div className="flex items-center gap-2 mb-3">
-              <Star className="w-5 h-5 text-[#F5C842]" />
-              <h4 className="font-cinzel text-xl font-bold text-white">AstroVedic AI</h4>
-            </div>
+            <Link to="/" className="flex items-center mb-4">
+              <img src="/images/logo.png" alt="AstroVedic AI Logo" className="h-12 w-auto" />
+            </Link>
             <p className="text-sm text-zinc-400 max-w-xs">Where Ancient Stars Meet Artificial Intelligence — AI-powered astrology trusted by thousands.</p>
           </div>
           <div>

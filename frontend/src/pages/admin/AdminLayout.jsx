@@ -263,10 +263,9 @@ export const AdminLoginPage = () => {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center mb-4">
-            <Shield className="w-8 h-8 text-white" />
+          <div className="flex justify-center mb-4">
+            <img src="/images/logo.png" alt="AstroVedic AI Logo" className="h-16 w-auto" />
           </div>
-          <h1 className="font-cinzel text-2xl font-bold text-white">AstroVedic AI</h1>
           <p className="text-slate-400">Admin Panel Login</p>
         </div>
 

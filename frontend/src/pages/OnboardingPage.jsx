@@ -73,10 +73,7 @@ const OnboardingPage = () => {
       <div className="w-full max-w-lg">
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="size-10 rounded-lg bg-[#D4A017]/15 flex items-center justify-center">
-            <Star className="size-6 text-[#F5C842]" />
-          </div>
-          <span className="font-cinzel text-2xl av-text font-bold">AstroVedic AI</span>
+          <img src="/images/logo.png" alt="AstroVedic AI Logo" className="h-12 w-auto" />
         </div>
 
         {/* Progress bar */}

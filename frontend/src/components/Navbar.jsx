@@ -127,17 +127,8 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 lg:h-20">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2" data-testid="logo-link">
-            <div className="relative">
-              <Moon className="w-8 h-8" style={{ color: "hsl(var(--av-gold))" }} />
-              <Star className="w-4 h-4 absolute -top-1 -right-1" style={{ color: "hsl(var(--av-purple))" }} />
-            </div>
-            <div className="hidden sm:block">
-              <h1 className="font-cinzel text-xl lg:text-2xl font-bold av-text">
-                Astro<span style={{ color: "hsl(var(--av-gold))" }}>Vedic</span> AI
-              </h1>
-              <p className="text-[10px] av-text-3 -mt-1 tracking-wider">WHERE STARS MEET AI</p>
-            </div>
+          <Link to="/" className="flex items-center" data-testid="logo-link">
+            <img src="/images/logo.png" alt="AstroVedic AI Logo" className="h-10 lg:h-12 w-auto" />
           </Link>
 
           {/* Desktop Navigation */}

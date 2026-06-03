@@ -219,11 +219,8 @@ const AuthPage = ({ mode = "login" }) => {
       {/* LEFT - Animated Characters Panel */}
       <div className="relative hidden lg:flex flex-col justify-between p-12 text-white overflow-hidden"
         style={{ background: "linear-gradient(135deg, #2D1B69 0%, #5B2FB4 50%, #8B5CF6 100%)" }}>
-        <div className="relative z-20 flex items-center gap-2 text-lg font-semibold">
-          <div className="size-9 rounded-lg bg-white/10 backdrop-blur-sm flex items-center justify-center">
-            <Star className="size-5 text-[#F5C842]" />
-          </div>
-          <span className="font-cinzel text-xl">AstroVedic AI</span>
+        <div className="relative z-20 flex items-center gap-2">
+          <img src="/images/logo.png" alt="AstroVedic AI Logo" className="h-10 w-auto" />
         </div>
 
         <div className="relative z-20 flex items-end justify-center h-[460px]">
@@ -321,10 +318,7 @@ const AuthPage = ({ mode = "login" }) => {
       <div className="flex items-center justify-center p-6 sm:p-8 av-bg">
         <div className="w-full max-w-[420px]">
           <div className="lg:hidden flex items-center justify-center gap-2 mb-10">
-            <div className="size-9 rounded-lg bg-[#D4A017]/15 flex items-center justify-center">
-              <Star className="size-5 text-[#F5C842]" />
-            </div>
-            <span className="font-cinzel text-xl av-text">AstroVedic AI</span>
+            <img src="/images/logo.png" alt="AstroVedic AI Logo" className="h-12 w-auto" />
           </div>
 
           <div className="text-center mb-8">
