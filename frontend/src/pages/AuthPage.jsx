@@ -308,8 +308,8 @@ const AuthPage = ({ mode = "login" }) => {
         </div>
 
         <div className="relative z-20 flex items-center gap-8 text-sm text-white/70">
-          <a href="#" className="hover:text-white">Privacy Policy</a>
-          <a href="#" className="hover:text-white">Terms of Service</a>
+          <Link to="/privacy-policy" className="hover:text-white">Privacy Policy</Link>
+          <Link to="/terms-and-conditions" className="hover:text-white">Terms of Service</Link>
           <a href="mailto:support@astrovedic.ai" className="hover:text-white">Contact</a>
         </div>
 

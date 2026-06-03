@@ -19,6 +19,11 @@ import AuthPage from "@/pages/AuthPage";
 
 import OnboardingPage from "@/pages/OnboardingPage";
 import ProfilePage from "@/pages/ProfilePage";
+import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
+import TermsAndConditionsPage from "@/pages/TermsAndConditionsPage";
+import DisclaimerPage from "@/pages/DisclaimerPage";
+import PricingPolicyPage from "@/pages/PricingPolicyPage";
+import AboutUsPage from "@/pages/AboutUsPage";
 
 // Admin Pages
 import { AdminLayout, AdminLoginPage } from "@/pages/admin/AdminLayout";
@@ -46,6 +51,7 @@ import AdminOrders from "@/pages/admin/AdminOrders";
 // Components
 import Navbar from "@/components/Navbar";
 import MobileNav from "@/components/MobileNav";
+import Footer from "@/components/Footer";
 import SupportProvider, { SupportFloatingButton } from "@/components/SupportContext";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -71,6 +77,7 @@ const PublicLayout = ({ children }) => {
       <main className="relative z-10">
         {children}
       </main>
+      <Footer />
       <MobileNav />
       <SupportFloatingButton />
     </>
@@ -158,6 +165,11 @@ function App() {
                   <Route path="/signup" element={<AuthPage mode="signup" />} />
                   <Route path="/onboarding" element={<OnboardingPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+                  <Route path="/terms-and-conditions" element={<TermsAndConditionsPage />} />
+                  <Route path="/disclaimer" element={<DisclaimerPage />} />
+                  <Route path="/pricing-policy" element={<PricingPolicyPage />} />
+                  <Route path="/about-us" element={<AboutUsPage />} />
                 </Routes>
               </PublicLayout>
             </div>
