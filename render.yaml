@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: astrovedic-backend
+    env: python
+    region: singapore # You can change this to frankly any region, but Singapore/Frankfurt are good for India
+    buildCommand: "cd backend && pip install -r requirements.txt"
+    startCommand: "cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: MONGO_URL
+        sync: false
+      - key: DB_NAME
+        value: astrovedic
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: CORS_ORIGINS
+        value: "*" # Update this later to your Hostinger domain (e.g. https://yourdomain.com)
