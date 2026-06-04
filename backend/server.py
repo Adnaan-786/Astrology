@@ -293,20 +293,26 @@ def _build_fallback_chain(primary_model: str, primary_key: str) -> list:
     """
     Build an ordered list of (model, api_key, provider) tuples.
     The primary model is tried first, then the remaining fallbacks
-    (skipping duplicates of the primary).
+    (skipping duplicates of the primary and entries with no valid key).
     """
-    any_key = primary_key or OPENROUTER_API_KEY_GROQ or OPENROUTER_API_KEY_GEMINI or OPENROUTER_API_KEY
+    # Find the first non-empty key available anywhere
+    any_key = (primary_key or "").strip() or \
+              (OPENROUTER_API_KEY_GROQ or "").strip() or \
+              (OPENROUTER_API_KEY_GEMINI or "").strip() or \
+              (OPENROUTER_API_KEY or "").strip() or ""
     chain = []
-    # 1. Primary model first
+    # 1. Primary model first (only if we have a key)
     primary_provider = None
     if primary_model == OPENROUTER_GROQ_MODEL:
         primary_provider = {"order": ["Groq"]}
-    chain.append((primary_model, primary_key or any_key, primary_provider))
-    # 2. Remaining fallbacks (skip duplicates)
+    effective_primary_key = (primary_key or "").strip() or any_key
+    if effective_primary_key:
+        chain.append((primary_model, effective_primary_key, primary_provider))
+    # 2. Remaining fallbacks (skip duplicates and entries with no key)
     for fb in FALLBACK_MODELS:
         if fb["model"] == primary_model:
             continue
-        fb_key = fb["api_key"] or any_key
+        fb_key = (fb["api_key"] or "").strip() or any_key
         if not fb_key:
             continue  # skip if we have no key at all
         chain.append((fb["model"], fb_key, fb.get("provider")))
@@ -329,10 +335,19 @@ async def call_openrouter(
     # Default to Groq model if none specified
     if not model:
         model = OPENROUTER_GROQ_MODEL
-    if not api_key:
-        api_key = OPENROUTER_API_KEY_GROQ or OPENROUTER_API_KEY
+    if not (api_key or "").strip():
+        api_key = (OPENROUTER_API_KEY_GROQ or "").strip() or \
+                  (OPENROUTER_API_KEY_GEMINI or "").strip() or \
+                  (OPENROUTER_API_KEY or "").strip() or ""
 
     chain = _build_fallback_chain(model, api_key)
+
+    if not chain:
+        raise HTTPException(
+            status_code=500,
+            detail="No AI models available. Please set OPENROUTER_API_KEY_GROQ or OPENROUTER_API_KEY_GEMINI in the server environment variables.",
+        )
+
     last_error = None
 
     for i, (m, k, prov) in enumerate(chain):
