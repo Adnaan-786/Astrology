@@ -623,7 +623,10 @@ async def ai_chat(request: ChatRequest, user: dict = Depends(require_auth)):
                 }
             )
 
-    # Increment usage counter
+    # Call AI first — only deduct credits AFTER a successful response
+    response = await get_ai_response(request.session_id, request.message, model, api_key)
+
+    # Increment usage counter only after successful AI response
     if chat_limit != -1:
         usage_filter = _get_chat_period_key(limit_period, user["id"])
         await db.chat_usage.update_one(
@@ -632,7 +635,6 @@ async def ai_chat(request: ChatRequest, user: dict = Depends(require_auth)):
             upsert=True,
         )
 
-    response = await get_ai_response(request.session_id, request.message, model, api_key)
     return ChatResponse(response=response, session_id=request.session_id)
 
 @api_router.get("/ai/chat-usage")
@@ -779,38 +781,21 @@ async def generate_ai_report(request: ReportRequest, current_user: Optional[dict
                 price = 0
                 is_plan_free = True
 
-    # For paid reports: deduct wallet balance securely
+    # Check wallet balance BEFORE generating (but don't deduct yet)
     wallet_balance = 0
-    if price > 0 and current_user:
-        if user:
-            wallet_balance = user.get("wallet_balance", 0)
-
-            if wallet_balance < price:
-                raise HTTPException(
-                    status_code=402,
-                    detail={"error": "INSUFFICIENT_BALANCE", "message": f"Insufficient wallet balance. Needed ₹{price}, available ₹{wallet_balance}. Please recharge."},
-                )
-
-            # Deduct
-            await db.users.update_one(
-                {"id": current_user["id"]}, {"$inc": {"wallet_balance": -price}}
-            )
-            wallet_balance -= price
-            await db.wallet_transactions.insert_one({
-                "id": str(uuid.uuid4()),
-                "user_id": current_user["id"],
-                "type": "debit",
-                "amount": price,
-                "description": f"AI Report: {report_type}",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-    elif price == 0 and current_user and user:
+    if current_user and user:
         wallet_balance = user.get("wallet_balance", 0)
+    if price > 0 and current_user and user:
+        if wallet_balance < price:
+            raise HTTPException(
+                status_code=402,
+                detail={"error": "INSUFFICIENT_BALANCE", "message": f"Insufficient wallet balance. Needed ₹{price}, available ₹{wallet_balance}. Please recharge."},
+            )
 
     # Build prompt
     user_prompt = _build_report_prompt(report_type, request.model_dump())
 
-    # Call OpenRouter
+    # Call OpenRouter FIRST — only deduct wallet AFTER success
     try:
         report_messages = [
             {"role": "system", "content": REPORT_SYSTEM_PROMPT},
@@ -820,6 +805,21 @@ async def generate_ai_report(request: ReportRequest, current_user: Optional[dict
     except Exception as e:
         logging.error(f"AI Report error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
+
+    # Deduct wallet balance ONLY after successful AI response
+    if price > 0 and current_user and user:
+        await db.users.update_one(
+            {"id": current_user["id"]}, {"$inc": {"wallet_balance": -price}}
+        )
+        wallet_balance -= price
+        await db.wallet_transactions.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": current_user["id"],
+            "type": "debit",
+            "amount": price,
+            "description": f"AI Report: {report_type}",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
 
     # Save
     report_doc = {
