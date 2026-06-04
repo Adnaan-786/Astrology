@@ -30,8 +30,9 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-OPENROUTER_API_KEY_GROQ = os.environ.get("OPENROUTER_API_KEY_GROQ", "")
-OPENROUTER_API_KEY_GEMINI = os.environ.get("OPENROUTER_API_KEY_GEMINI", "")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
+OPENROUTER_API_KEY_GROQ = os.environ.get("OPENROUTER_API_KEY_GROQ", "").strip() or OPENROUTER_API_KEY
+OPENROUTER_API_KEY_GEMINI = os.environ.get("OPENROUTER_API_KEY_GEMINI", "").strip() or OPENROUTER_API_KEY
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_GROQ_MODEL = "meta-llama/llama-3.1-8b-instruct"
 OPENROUTER_GEMINI_MODEL = "google/gemini-2.5-flash"
@@ -227,10 +228,41 @@ class BlogPost(BaseModel):
     reading_time: int = 5
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
-# ==================== AI (OPENROUTER - FREE) ====================
+# ==================== AI (OPENROUTER WITH AUTO-FALLBACK) ====================
 
-async def call_openrouter(messages: list, model: str, api_key: str, max_tokens: int = 2000) -> str:
-    """Call OpenRouter API. Returns the response text."""
+# Fallback chain of free/cheap models on OpenRouter.
+# When the primary model fails (rate-limit, 402 credits, 5xx, timeout),
+# the system automatically tries the next model in the chain.
+# Models use the ":free" suffix where available for zero-cost inference.
+FALLBACK_MODELS = [
+    # (model_id, api_key_override_or_None, optional_provider_hint_or_None)
+    # -- The first two entries are the "primary" paid keys --
+    {"model": OPENROUTER_GROQ_MODEL, "api_key": OPENROUTER_API_KEY_GROQ, "provider": {"order": ["Groq"]}},
+    {"model": OPENROUTER_GEMINI_MODEL, "api_key": OPENROUTER_API_KEY_GEMINI, "provider": None},
+    # -- Free fallbacks (no special key needed, use whichever key is available) --
+    {"model": "google/gemma-3-27b-it:free",     "api_key": None, "provider": None},
+    {"model": "meta-llama/llama-4-scout:free",   "api_key": None, "provider": None},
+    {"model": "qwen/qwen3-32b:free",             "api_key": None, "provider": None},
+    {"model": "mistralai/mistral-small-3.1-24b-instruct:free", "api_key": None, "provider": None},
+    {"model": "google/gemma-3-12b-it:free",      "api_key": None, "provider": None},
+]
+
+# HTTP status codes that indicate a retryable / fallback-worthy failure
+_RETRYABLE_STATUS_CODES = {402, 429, 500, 502, 503, 504}
+
+async def _call_single_model(
+    messages: list,
+    model: str,
+    api_key: str,
+    max_tokens: int = 2000,
+    temperature: float = 0.7,
+    provider: dict = None,
+) -> str:
+    """
+    Call a single OpenRouter model. Returns the response text.
+    Raises an Exception on failure (do NOT raise HTTPException here so
+    that the fallback loop can catch and continue).
+    """
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -241,22 +273,91 @@ async def call_openrouter(messages: list, model: str, api_key: str, max_tokens: 
         "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
-        "temperature": 0.7,
+        "temperature": temperature,
     }
-    
-    if model == OPENROUTER_GROQ_MODEL:
-        payload["provider"] = {"order": ["Groq"]}
-    
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    if provider:
+        payload["provider"] = provider
+
+    async with httpx.AsyncClient(timeout=60.0) as http_client:
+        resp = await http_client.post(OPENROUTER_BASE_URL, json=payload, headers=headers)
+        if resp.status_code != 200:
+            raise Exception(f"OpenRouter [{model}] HTTP {resp.status_code}: {resp.text[:300]}")
+        data = resp.json()
+        content = data.get("choices", [{}])[0].get("message", {}).get("content")
+        if not content:
+            raise Exception(f"OpenRouter [{model}] returned empty content")
+        return content
+
+
+def _build_fallback_chain(primary_model: str, primary_key: str) -> list:
+    """
+    Build an ordered list of (model, api_key, provider) tuples.
+    The primary model is tried first, then the remaining fallbacks
+    (skipping duplicates of the primary).
+    """
+    any_key = primary_key or OPENROUTER_API_KEY_GROQ or OPENROUTER_API_KEY_GEMINI or OPENROUTER_API_KEY
+    chain = []
+    # 1. Primary model first
+    primary_provider = None
+    if primary_model == OPENROUTER_GROQ_MODEL:
+        primary_provider = {"order": ["Groq"]}
+    chain.append((primary_model, primary_key or any_key, primary_provider))
+    # 2. Remaining fallbacks (skip duplicates)
+    for fb in FALLBACK_MODELS:
+        if fb["model"] == primary_model:
+            continue
+        fb_key = fb["api_key"] or any_key
+        if not fb_key:
+            continue  # skip if we have no key at all
+        chain.append((fb["model"], fb_key, fb.get("provider")))
+    return chain
+
+
+async def call_openrouter(
+    messages: list,
+    model: str = None,
+    api_key: str = None,
+    max_tokens: int = 2000,
+    temperature: float = 0.7,
+) -> str:
+    """
+    Call OpenRouter with automatic model fallback.
+    Tries the requested model first, then cycles through free fallback
+    models if the primary one fails due to rate-limits, insufficient
+    credits, or server errors.
+    """
+    # Default to Groq model if none specified
+    if not model:
+        model = OPENROUTER_GROQ_MODEL
+    if not api_key:
+        api_key = OPENROUTER_API_KEY_GROQ or OPENROUTER_API_KEY
+
+    chain = _build_fallback_chain(model, api_key)
+    last_error = None
+
+    for i, (m, k, prov) in enumerate(chain):
         try:
-            resp = await client.post(OPENROUTER_BASE_URL, json=payload, headers=headers)
-            if resp.status_code != 200:
-                logging.error(f"OpenRouter Error: {resp.status_code} - {resp.text}")
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
+            result = await _call_single_model(
+                messages=messages,
+                model=m,
+                api_key=k,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                provider=prov,
+            )
+            if i > 0:
+                logging.info(f"AI fallback succeeded on model #{i+1}: {m}")
+            return result
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
+            last_error = e
+            logging.warning(f"AI model {m} failed (attempt {i+1}/{len(chain)}): {e}")
+            continue
+
+    # All models exhausted
+    raise HTTPException(
+        status_code=500,
+        detail=f"All AI models failed. Last error: {str(last_error)}",
+    )
 
 ASTROLOGY_SYSTEM_PROMPT = """You are NakshatraAI, the most advanced Vedic astrology AI assistant created by AstroVedic AI. You have deep knowledge of:
 - Vedic/Jyotish astrology including Kundli, Rashis, Nakshatras, Grahas, Bhavas, Dashas
