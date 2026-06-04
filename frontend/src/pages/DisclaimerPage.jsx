@@ -11,6 +11,16 @@ const DisclaimerPage = () => {
       <p className="mt-6">
         AstroVedic AI is a product of AstroVedic AI. All transactions and gathered data are/will be accessed by AstroVedic AI.
       </p>
+
+      <h2 className="text-xl font-bold text-white mt-8 mb-4">STRICT NO-REFUND POLICY</h2>
+      <ul className="space-y-4 list-disc pl-5 text-zinc-300">
+        <li>
+          <strong>All Sales are Final:</strong> Because AI astrology charts, Kundlis, and reports are digital products delivered instantaneously upon payment, all transactions are strictly non-refundable and non-cancellable.
+        </li>
+        <li>
+          <strong>Technical Glitches:</strong> Refunds or manual delivery will only be processed if a user’s bank account is debited but a technical server error prevents the AI output from being generated. Such verified cases must be emailed to astrovedicaiii@gmail.com and will be resolved within 7-10 working days.
+        </li>
+      </ul>
     </LegalPageLayout>
   );
 };
