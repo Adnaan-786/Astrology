@@ -83,7 +83,7 @@ const DashboardPage = () => {
       });
 
       const options = {
-        key: "rzp_test_SxZsoRYGIR7Tnn",
+        key: "rzp_live_SxaIbfgFZqYfom",
         amount: orderData.amount,
         currency: orderData.currency,
         name: "AstroVedic",

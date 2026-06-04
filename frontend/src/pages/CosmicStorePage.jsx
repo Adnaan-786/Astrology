@@ -80,7 +80,7 @@ const CosmicStorePage = () => {
       const { data: orderData } = await apiClient.post("/store/checkout", payload);
       
       const options = {
-        key: "rzp_test_SxZsoRYGIR7Tnn",
+        key: "rzp_live_SxaIbfgFZqYfom",
         amount: orderData.amount,
         currency: orderData.currency,
         name: "AstroVedic Cosmic Store",

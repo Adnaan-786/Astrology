@@ -61,7 +61,7 @@ const PlansPage = () => {
       });
 
       const options = {
-        key: "rzp_test_SxZsoRYGIR7Tnn", // Or inject via env in real setup
+        key: "rzp_live_SxaIbfgFZqYfom", // Or inject via env in real setup
         amount: orderData.amount,
         currency: orderData.currency,
         name: "AstroVedic",
