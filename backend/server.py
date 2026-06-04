@@ -563,20 +563,32 @@ async def get_chat_usage(user: dict = Depends(require_auth)):
 
 # ==================== AI REPORTS ====================
 
-REPORT_PRICING = {
-    "kundli-basic": 0,
-    "kundli-detailed": 99,
-    "kundli-premium": 299,
-    "compatibility": 149,
-    "career": 199,
-    "love": 149,
-    "finance": 199,
-    "health": 149,
-    "vastu": 249,
-    "annual": 299,
-    "sade-sati": 149,
-    "child-birth": 199,
+# Fallback prices used only if the ai_report_types collection is empty/missing.
+FALLBACK_REPORT_PRICING = {
+    "kundli-basic": 0, "kundli-detailed": 99, "kundli-premium": 299,
+    "compatibility": 149, "career": 199, "love": 149, "finance": 199,
+    "health": 149, "vastu": 249, "annual": 299, "sade-sati": 149, "child-birth": 199,
 }
+
+async def get_report_type_price(report_slug: str) -> int:
+    """Look up the admin-managed price for a report type from the DB."""
+    rt = await db.ai_report_types.find_one({"slug": report_slug, "is_active": True}, {"_id": 0, "price": 1})
+    if rt:
+        return int(rt.get("price", 0))
+    return FALLBACK_REPORT_PRICING.get(report_slug, -1)  # -1 means not found
+
+async def get_user_plan_details(plan_slug: str) -> dict:
+    """Fetch plan details from DB by slug."""
+    plan = await db.plans.find_one({"slug": plan_slug, "is_active": True}, {"_id": 0})
+    return plan or {}
+
+async def count_user_reports_this_month(user_id: str) -> int:
+    """Count how many AI reports a user generated this calendar month."""
+    current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+    return await db.ai_reports.count_documents({
+        "user_id": user_id,
+        "created_at": {"$regex": f"^{current_month}"}
+    })
 
 REPORT_SYSTEM_PROMPT = (
     "You are a master Vedic astrologer with 30 years of experience. Generate detailed, "
@@ -623,54 +635,67 @@ class ReportRequest(BaseModel):
 @api_router.post("/ai/report")
 async def generate_ai_report(request: ReportRequest, current_user: Optional[dict] = Depends(get_current_user)):
     report_type = request.reportType
-    if report_type not in REPORT_PRICING:
+
+    # Look up the report type price from DB (admin-managed)
+    base_price = await get_report_type_price(report_type)
+    if base_price == -1:
         raise HTTPException(status_code=400, detail="Invalid report type")
 
-    price = REPORT_PRICING[report_type]
-
     # Require authentication for paid reports
-    if price > 0 and not current_user:
+    if base_price > 0 and not current_user:
         raise HTTPException(status_code=401, detail="Authentication required for paid reports")
 
     model = OPENROUTER_GROQ_MODEL
     api_key = OPENROUTER_API_KEY_GROQ
     user = None
-    
+    plan_slug = "free"
+    price = base_price  # This may become 0 if user's plan covers it
+    is_plan_free = False
+
     if current_user:
         user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
-        plan = user.get("plan", "free") if user else "free"
-        
-        if plan in ["silver", "gold", "platinum"]:
+        plan_slug = user.get("plan", "free") if user else "free"
+
+        if plan_slug in ["silver", "gold", "platinum"]:
             model = OPENROUTER_GEMINI_MODEL
             api_key = OPENROUTER_API_KEY_GEMINI
 
-        # Free basic kundli - 1 per month for free plan
-        if report_type == "kundli-basic" and plan == "free":
-            current_month = datetime.now(timezone.utc).strftime("%Y-%m")
-            existing = await db.ai_reports.find_one({
-                "user_id": current_user["id"], 
-                "report_type": "kundli-basic",
-                "created_at": {"$regex": f"^{current_month}"}
-            }, {"_id": 0})
-            if existing:
+        # Fetch the user's plan details from DB
+        plan_details = await get_user_plan_details(plan_slug)
+
+        # Check if this report type is allowed for the user's plan
+        allowed_types = plan_details.get("allowed_report_types", [])
+        if allowed_types and len(allowed_types) > 0:
+            if report_type not in allowed_types:
                 raise HTTPException(
                     status_code=403,
-                    detail={"error": "FREE_REPORT_USED", "message": "You've already used your 1 free basic Kundli for this month. Try our detailed report for ₹99."},
+                    detail={"error": "REPORT_NOT_ALLOWED", "message": f"Your {plan_details.get('name', plan_slug)} plan does not include this report type. Please upgrade your plan."}
                 )
+
+        # Check plan-based free report allowance
+        reports_limit = plan_details.get("ai_reports_per_month", 0)
+        if reports_limit == -1:
+            # Unlimited reports
+            price = 0
+            is_plan_free = True
+        elif reports_limit > 0:
+            used_this_month = await count_user_reports_this_month(current_user["id"])
+            if used_this_month < reports_limit:
+                price = 0
+                is_plan_free = True
 
     # For paid reports: deduct wallet balance securely
     wallet_balance = 0
     if price > 0 and current_user:
-        # User already fetched above
         if user:
             wallet_balance = user.get("wallet_balance", 0)
-            
+
             if wallet_balance < price:
                 raise HTTPException(
                     status_code=402,
                     detail={"error": "INSUFFICIENT_BALANCE", "message": f"Insufficient wallet balance. Needed ₹{price}, available ₹{wallet_balance}. Please recharge."},
                 )
-                
+
             # Deduct
             await db.users.update_one(
                 {"id": current_user["id"]}, {"$inc": {"wallet_balance": -price}}
@@ -684,11 +709,13 @@ async def generate_ai_report(request: ReportRequest, current_user: Optional[dict
                 "description": f"AI Report: {report_type}",
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
+    elif price == 0 and current_user and user:
+        wallet_balance = user.get("wallet_balance", 0)
 
     # Build prompt
     user_prompt = _build_report_prompt(report_type, request.model_dump())
 
-    # Call OpenRouter (FREE)
+    # Call OpenRouter
     try:
         report_messages = [
             {"role": "system", "content": REPORT_SYSTEM_PROMPT},
@@ -711,6 +738,7 @@ async def generate_ai_report(request: ReportRequest, current_user: Optional[dict
         },
         "content": report_text,
         "price_paid": price,
+        "is_plan_free": is_plan_free,
         "status": "completed",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -720,9 +748,37 @@ async def generate_ai_report(request: ReportRequest, current_user: Optional[dict
         "report": report_text,
         "reportType": report_type,
         "price": price,
+        "basePrice": base_price,
+        "isPlanFree": is_plan_free,
         "walletBalance": wallet_balance,
         "reportId": report_doc["id"],
         "generatedAt": report_doc["created_at"],
+    }
+
+
+@api_router.get("/ai/report-usage")
+async def get_report_usage(current_user: dict = Depends(require_auth)):
+    """Returns the user's AI report usage this month vs their plan's limit, plus allowed report types."""
+    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
+    plan_slug = user.get("plan", "free") if user else "free"
+    plan_details = await get_user_plan_details(plan_slug)
+    reports_limit = plan_details.get("ai_reports_per_month", 0)
+    used_this_month = await count_user_reports_this_month(current_user["id"])
+    allowed_types = plan_details.get("allowed_report_types", [])
+
+    if reports_limit == -1:
+        remaining = -1  # unlimited
+    else:
+        remaining = max(0, reports_limit - used_this_month)
+
+    return {
+        "plan": plan_slug,
+        "plan_name": plan_details.get("name", plan_slug),
+        "limit": reports_limit,
+        "used": used_this_month,
+        "remaining": remaining,
+        "unlimited": reports_limit == -1,
+        "allowed_report_types": allowed_types,
     }
 
 @api_router.get("/ai/reports")
@@ -1920,10 +1976,10 @@ async def seed_data(_admin: dict = Depends(require_admin)):
         })
 
     plans_data = [
-        {"id": str(uuid.uuid4()), "name": "Nakshatra Free", "slug": "free", "description": "Start your cosmic journey", "price_monthly": 0, "price_annual": 0, "features": ["1 Basic Kundli Report", "5 AI Chat Messages/Day", "Daily Horoscope", "Browse Astrologers"], "ai_reports_per_month": 1, "free_chat_minutes": 0, "discount_on_products": 0, "ai_chat_messages_limit": 5, "ai_chat_limit_period": "day", "is_active": True, "is_featured": False, "color": "#6B7280", "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": str(uuid.uuid4()), "name": "Tara Silver", "slug": "silver", "description": "Enhanced features for regular seekers", "price_monthly": 199, "price_annual": 1599, "features": ["3 AI Reports/Month", "30 AI Chat Messages/Day", "10 Free Minutes", "5% Store Discount", "Priority Support"], "ai_reports_per_month": 3, "free_chat_minutes": 10, "discount_on_products": 5, "ai_chat_messages_limit": 30, "ai_chat_limit_period": "day", "is_active": True, "is_featured": False, "color": "#9CA3AF", "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": str(uuid.uuid4()), "name": "Graha Gold", "slug": "gold", "description": "Premium features for enthusiasts", "price_monthly": 499, "price_annual": 3999, "features": ["10 AI Reports/Month", "Unlimited AI Chat", "30 Free Minutes", "15% Store Discount", "Video Call", "Gold Badge", "Annual Report"], "ai_reports_per_month": 10, "free_chat_minutes": 30, "discount_on_products": 15, "ai_chat_messages_limit": -1, "ai_chat_limit_period": "day", "is_active": True, "is_featured": True, "color": "#D4A017", "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": str(uuid.uuid4()), "name": "Jyotish Platinum", "slug": "platinum", "description": "Ultimate cosmic experience", "price_monthly": 999, "price_annual": 7999, "features": ["Unlimited AI Reports", "Unlimited AI Chat", "60 Free Minutes/Month", "25% Store Discount", "Free Shipping", "Dedicated Astrologer", "Monthly Live Session", "Platinum Badge", "Priority Queue"], "ai_reports_per_month": -1, "free_chat_minutes": 60, "discount_on_products": 25, "ai_chat_messages_limit": -1, "ai_chat_limit_period": "day", "is_active": True, "is_featured": False, "color": "#8B5CF6", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": str(uuid.uuid4()), "name": "Nakshatra Free", "slug": "free", "description": "Start your cosmic journey", "price_monthly": 0, "price_annual": 0, "features": ["1 Basic Kundli Report", "5 AI Chat Messages/Day", "Daily Horoscope", "Browse Astrologers"], "ai_reports_per_month": 1, "free_chat_minutes": 0, "discount_on_products": 0, "ai_chat_messages_limit": 5, "ai_chat_limit_period": "day", "allowed_report_types": ["kundli-basic"], "is_active": True, "is_featured": False, "color": "#6B7280", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": str(uuid.uuid4()), "name": "Tara Silver", "slug": "silver", "description": "Enhanced features for regular seekers", "price_monthly": 199, "price_annual": 1599, "features": ["3 AI Reports/Month", "30 AI Chat Messages/Day", "10 Free Minutes", "5% Store Discount", "Priority Support"], "ai_reports_per_month": 3, "free_chat_minutes": 10, "discount_on_products": 5, "ai_chat_messages_limit": 30, "ai_chat_limit_period": "day", "allowed_report_types": ["kundli-basic", "kundli-detailed", "compatibility", "career", "health"], "is_active": True, "is_featured": False, "color": "#9CA3AF", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": str(uuid.uuid4()), "name": "Graha Gold", "slug": "gold", "description": "Premium features for enthusiasts", "price_monthly": 499, "price_annual": 3999, "features": ["10 AI Reports/Month", "Unlimited AI Chat", "30 Free Minutes", "15% Store Discount", "Video Call", "Gold Badge", "Annual Report"], "ai_reports_per_month": 10, "free_chat_minutes": 30, "discount_on_products": 15, "ai_chat_messages_limit": -1, "ai_chat_limit_period": "day", "allowed_report_types": [], "is_active": True, "is_featured": True, "color": "#D4A017", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": str(uuid.uuid4()), "name": "Jyotish Platinum", "slug": "platinum", "description": "Ultimate cosmic experience", "price_monthly": 999, "price_annual": 7999, "features": ["Unlimited AI Reports", "Unlimited AI Chat", "60 Free Minutes/Month", "25% Store Discount", "Free Shipping", "Dedicated Astrologer", "Monthly Live Session", "Platinum Badge", "Priority Queue"], "ai_reports_per_month": -1, "free_chat_minutes": 60, "discount_on_products": 25, "ai_chat_messages_limit": -1, "ai_chat_limit_period": "day", "allowed_report_types": [], "is_active": True, "is_featured": False, "color": "#8B5CF6", "created_at": datetime.now(timezone.utc).isoformat()},
     ]
 
     blog_data = [

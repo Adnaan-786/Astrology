@@ -82,6 +82,19 @@ const useReportTypes = () => {
   return types;
 };
 
+// Hook: returns the user's AI report usage this month (limit, used, remaining, allowed types)
+const useReportUsage = () => {
+  const [usage, setUsage] = useState(null);
+  const refresh = () => {
+    if (!isLoggedIn()) return;
+    apiClient.get("/ai/report-usage")
+      .then((res) => setUsage(res.data))
+      .catch(() => {});
+  };
+  useEffect(() => { refresh(); }, []);
+  return { usage, refresh };
+};
+
 // Static alias kept for any legacy references; new code MUST use useReportTypes().
 const REPORT_TYPES = FALLBACK_REPORT_TYPES;
 
@@ -377,6 +390,7 @@ const ReportFlow = () => {
   const [step, setStep] = useState(1); // 1: select, 2: form, 3: loading, 4: display
   const [selectedType, setSelectedType] = useState(null);
   const reportTypes = useReportTypes();
+  const { usage: reportUsage, refresh: refreshUsage } = useReportUsage();
   const [form, setForm] = useState({
     birthName: "", dob: "", tob: "", pob: "",
     partnerName: "", partnerDob: "",
@@ -386,6 +400,27 @@ const ReportFlow = () => {
   const [reportMeta, setReportMeta] = useState(null);
   const reportBoxRef = useRef(null);
 
+  // Determine if a report type is allowed by the user's plan
+  const isReportAllowed = (reportId) => {
+    if (!reportUsage) return true; // not loaded yet, allow
+    const allowed = reportUsage.allowed_report_types;
+    if (!allowed || allowed.length === 0) return true; // empty = all allowed
+    return allowed.includes(reportId);
+  };
+
+  // Determine if a report will be free (covered by plan)
+  const isReportFreeWithPlan = () => {
+    if (!reportUsage || !isLoggedIn()) return false;
+    if (reportUsage.unlimited) return true;
+    return reportUsage.remaining > 0;
+  };
+
+  // Get effective price for display
+  const getEffectivePrice = (basePrice) => {
+    if (isReportFreeWithPlan() && basePrice > 0) return 0;
+    return basePrice;
+  };
+
   useEffect(() => {
     if (step !== 3) return;
     const t = setInterval(() => setLoadingMsgIdx((i) => (i + 1) % LOADING_MESSAGES.length), 1500);
@@ -393,6 +428,10 @@ const ReportFlow = () => {
   }, [step]);
 
   const pickType = (t) => {
+    if (!isReportAllowed(t.id)) {
+      toast.error("This report is not available on your plan. Please upgrade!");
+      return;
+    }
     setSelectedType(t);
     setStep(2);
   };
@@ -420,9 +459,10 @@ const ReportFlow = () => {
         partnerDob: form.partnerDob,
       }, { timeout: 120000 });
       setReportText(res.data.report);
-      setReportMeta({ type: selectedType.name, price: res.data.price, at: res.data.generatedAt });
+      setReportMeta({ type: selectedType.name, price: res.data.price, isPlanFree: res.data.isPlanFree, at: res.data.generatedAt });
       setStep(4);
-      toast.success("Report generated ✓");
+      refreshUsage(); // Refresh usage counter after generating
+      toast.success(res.data.isPlanFree ? "Report generated (free with your plan) ✓" : "Report generated ✓");
     } catch (err) {
       const detail = err?.response?.data?.detail;
       const msg = typeof detail === "string" ? detail : (detail?.message || "Failed to generate report. Try again.");
@@ -516,6 +556,7 @@ const ReportFlow = () => {
 
   // --- Renders ---
   if (step === 1) {
+    const planFree = isReportFreeWithPlan();
     return (
       <div data-testid="report-step-select">
         <div className="text-center mb-8">
@@ -524,34 +565,69 @@ const ReportFlow = () => {
           </h2>
           <p className="text-zinc-400">Choose a report. Get a detailed, personalised analysis in seconds.</p>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {reportTypes.map((r) => (
-            <button
-              key={r.id}
-              onClick={() => pickType(r)}
-              className="cosmic-card rounded-2xl p-5 text-left hover:border-[#D4A017]/60 transition-all group"
-              data-testid={`report-card-${r.id}`}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center"
-                  style={{ background: `${r.color}1F`, border: `1px solid ${r.color}55` }}
-                >
-                  <r.Icon className="w-6 h-6" style={{ color: r.color }} />
-                </div>
-                {r.free ? (
-                  <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">FREE</Badge>
+
+        {/* Report Usage Banner */}
+        {isLoggedIn() && reportUsage && (
+          <div className="mb-6 mx-auto max-w-xl">
+            <div className="rounded-2xl border border-[#2D1B69] bg-[#1A1730]/80 p-4 text-center">
+              <p className="text-sm text-zinc-300">
+                {reportUsage.unlimited ? (
+                  <><Crown className="w-4 h-4 inline mr-1 text-[#F5C842]" /> <span className="text-[#F5C842] font-semibold">Unlimited</span> free reports with your <span className="text-[#F5C842]">{reportUsage.plan_name}</span> plan</>
+                ) : reportUsage.limit > 0 ? (
+                  <><FileText className="w-4 h-4 inline mr-1 text-[#F5C842]" /> <span className="text-[#F5C842] font-semibold">{reportUsage.remaining}</span> of {reportUsage.limit} free reports remaining this month</>
                 ) : (
-                  <Badge className="bg-[#D4A017]/15 text-[#F5C842] border border-[#D4A017]/30">₹{r.price}</Badge>
+                  <><Wallet className="w-4 h-4 inline mr-1 text-zinc-400" /> Reports are charged from your wallet. <Link to="/plans" className="text-[#F5C842] hover:underline">Upgrade for free reports →</Link></>
                 )}
-              </div>
-              <h3 className="font-cinzel font-semibold text-white text-lg mb-1">{r.name}</h3>
-              <p className="text-xs text-zinc-400 line-clamp-2">{r.desc}</p>
-              <p className="mt-3 text-[#F5C842] text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-                Generate Report →
               </p>
-            </button>
-          ))}
+            </div>
+          </div>
+        )}
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {reportTypes.map((r) => {
+            const allowed = isReportAllowed(r.id);
+            const effectivePrice = getEffectivePrice(r.price);
+            return (
+              <button
+                key={r.id}
+                onClick={() => pickType(r)}
+                className={`cosmic-card rounded-2xl p-5 text-left transition-all group ${
+                  allowed ? "hover:border-[#D4A017]/60" : "opacity-50 cursor-not-allowed"
+                }`}
+                data-testid={`report-card-${r.id}`}
+                disabled={!allowed}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center"
+                    style={{ background: `${r.color}1F`, border: `1px solid ${r.color}55` }}
+                  >
+                    <r.Icon className="w-6 h-6" style={{ color: allowed ? r.color : "#666" }} />
+                  </div>
+                  {!allowed ? (
+                    <Badge className="bg-red-500/15 text-red-400 border border-red-500/30 text-[10px]"><Lock className="w-3 h-3 mr-1" />Upgrade</Badge>
+                  ) : r.free || effectivePrice === 0 ? (
+                    <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      {r.free ? "FREE" : "FREE ✦ Plan"}
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-[#D4A017]/15 text-[#F5C842] border border-[#D4A017]/30">₹{r.price}</Badge>
+                  )}
+                </div>
+                <h3 className="font-cinzel font-semibold text-white text-lg mb-1">{r.name}</h3>
+                <p className="text-xs text-zinc-400 line-clamp-2">{r.desc}</p>
+                {allowed ? (
+                  <p className="mt-3 text-[#F5C842] text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                    Generate Report →
+                  </p>
+                ) : (
+                  <p className="mt-3 text-red-400 text-xs font-semibold">
+                    Not available on your plan
+                  </p>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
     );
@@ -574,9 +650,12 @@ const ReportFlow = () => {
             <div>
               <h3 className="font-cinzel text-xl font-bold text-white">{selectedType.name}</h3>
               <p className="text-xs text-zinc-400">{selectedType.desc}</p>
-              <Badge className={`mt-2 ${selectedType.price === 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-[#D4A017]/15 text-[#F5C842]"}`}>
-                {selectedType.price === 0 ? "FREE" : `₹${selectedType.price}`}
-              </Badge>
+              {(() => {
+                const ep = getEffectivePrice(selectedType.price);
+                if (selectedType.price === 0) return <Badge className="mt-2 bg-emerald-500/20 text-emerald-400">FREE</Badge>;
+                if (ep === 0) return <Badge className="mt-2 bg-emerald-500/20 text-emerald-400">FREE ✦ Included in plan</Badge>;
+                return <Badge className="mt-2 bg-[#D4A017]/15 text-[#F5C842]">₹{selectedType.price}</Badge>;
+              })()}
             </div>
           </div>
           <form onSubmit={submitForm} className="space-y-4">
@@ -627,7 +706,7 @@ const ReportFlow = () => {
             )}
 
             <Button type="submit" className="btn-gold w-full py-6 text-base rounded-full" data-testid="report-generate-btn">
-              <Sparkles className="w-5 h-5 mr-2" /> Generate Report {selectedType.price > 0 && `• ₹${selectedType.price}`}
+              <Sparkles className="w-5 h-5 mr-2" /> Generate Report {getEffectivePrice(selectedType.price) > 0 && `• ₹${selectedType.price}`}
             </Button>
           </form>
         </div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import apiClient from "@/lib/apiClient";
 import { API } from "@/App";
 import { toast } from "sonner";
-import { Crown, Plus, Edit, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
+import { Crown, Plus, Edit, Trash2, ToggleLeft, ToggleRight, CheckSquare, Square, FileText } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,13 +16,15 @@ const AdminPlans = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [reportTypes, setReportTypes] = useState([]);
   const [form, setForm] = useState({
     name: "", slug: "", description: "", price_monthly: 0, price_annual: 0,
     features: [""], ai_reports_per_month: 0, free_chat_minutes: 0,
-    discount_on_products: 0, is_active: true, is_featured: false, color: "#8B5CF6"
+    discount_on_products: 0, is_active: true, is_featured: false, color: "#8B5CF6",
+    allowed_report_types: [],
   });
 
-  useEffect(() => { fetchPlans(); }, []);
+  useEffect(() => { fetchPlans(); fetchReportTypes(); }, []);
 
   const fetchPlans = async () => {
     try {
@@ -32,8 +34,15 @@ const AdminPlans = () => {
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
+  const fetchReportTypes = async () => {
+    try {
+      const res = await apiClient.get(`${API}/report-types`);
+      setReportTypes(res.data || []);
+    } catch (e) { console.error(e); }
+  };
+
   const resetForm = () => {
-    setForm({ name: "", slug: "", description: "", price_monthly: 0, price_annual: 0, features: [""], ai_reports_per_month: 0, free_chat_minutes: 0, discount_on_products: 0, is_active: true, is_featured: false, color: "#8B5CF6" });
+    setForm({ name: "", slug: "", description: "", price_monthly: 0, price_annual: 0, features: [""], ai_reports_per_month: 0, free_chat_minutes: 0, discount_on_products: 0, is_active: true, is_featured: false, color: "#8B5CF6", allowed_report_types: [] });
     setEditing(null);
   };
 
@@ -44,7 +53,8 @@ const AdminPlans = () => {
       features: plan.features?.length ? plan.features : [""],
       ai_reports_per_month: plan.ai_reports_per_month, free_chat_minutes: plan.free_chat_minutes,
       discount_on_products: plan.discount_on_products, is_active: plan.is_active,
-      is_featured: plan.is_featured, color: plan.color || "#8B5CF6"
+      is_featured: plan.is_featured, color: plan.color || "#8B5CF6",
+      allowed_report_types: plan.allowed_report_types || [],
     });
     setEditing(plan);
     setShowForm(true);
@@ -196,6 +206,43 @@ const AdminPlans = () => {
                 </div>
               ))}
               <Button type="button" size="sm" variant="outline" className="border-slate-700" onClick={addFeature}><Plus className="w-3 h-3 mr-1" /> Add Feature</Button>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                <FileText className="w-4 h-4 inline mr-1" /> Allowed AI Report Types
+                <span className="text-slate-500 text-xs ml-2">(empty = all reports allowed)</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto rounded-lg border border-slate-700 p-3 bg-slate-800/50">
+                {reportTypes.map((rt) => {
+                  const checked = form.allowed_report_types.includes(rt.slug);
+                  return (
+                    <button
+                      key={rt.slug}
+                      type="button"
+                      onClick={() => {
+                        setForm(p => ({
+                          ...p,
+                          allowed_report_types: checked
+                            ? p.allowed_report_types.filter(s => s !== rt.slug)
+                            : [...p.allowed_report_types, rt.slug]
+                        }));
+                      }}
+                      className={`flex items-center gap-2 p-2 rounded-lg text-left text-sm transition-colors ${
+                        checked ? "bg-purple-600/20 text-white" : "text-slate-400 hover:bg-slate-700/50"
+                      }`}
+                    >
+                      {checked ? <CheckSquare className="w-4 h-4 text-purple-400 flex-shrink-0" /> : <Square className="w-4 h-4 text-slate-500 flex-shrink-0" />}
+                      <span className="truncate">{rt.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {form.allowed_report_types.length > 0 && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-xs text-slate-400">{form.allowed_report_types.length} selected</span>
+                  <button type="button" className="text-xs text-purple-400 hover:underline" onClick={() => setForm(p => ({ ...p, allowed_report_types: [] }))}>Clear all</button>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
