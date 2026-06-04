@@ -400,14 +400,6 @@ const ReportFlow = () => {
   const [reportMeta, setReportMeta] = useState(null);
   const reportBoxRef = useRef(null);
 
-  // Determine if a report type is allowed by the user's plan
-  const isReportAllowed = (reportId) => {
-    if (!reportUsage) return true; // not loaded yet, allow
-    const allowed = reportUsage.allowed_report_types;
-    if (!allowed || allowed.length === 0) return true; // empty = all allowed
-    return allowed.includes(reportId);
-  };
-
   // Determine if a report will be free (covered by plan)
   const isReportFreeWithPlan = () => {
     if (!reportUsage || !isLoggedIn()) return false;
@@ -428,10 +420,6 @@ const ReportFlow = () => {
   }, [step]);
 
   const pickType = (t) => {
-    if (!isReportAllowed(t.id)) {
-      toast.error("This report is not available on your plan. Please upgrade!");
-      return;
-    }
     setSelectedType(t);
     setStep(2);
   };
@@ -572,11 +560,11 @@ const ReportFlow = () => {
             <div className="rounded-2xl border border-[#2D1B69] bg-[#1A1730]/80 p-4 text-center">
               <p className="text-sm text-zinc-300">
                 {reportUsage.unlimited ? (
-                  <><Crown className="w-4 h-4 inline mr-1 text-[#F5C842]" /> <span className="text-[#F5C842] font-semibold">Unlimited</span> free reports with your <span className="text-[#F5C842]">{reportUsage.plan_name}</span> plan</>
+                  <><Crown className="w-4 h-4 inline mr-1 text-[#F5C842]" /> <span className="text-[#F5C842] font-semibold">Unlimited</span> tokens with your <span className="text-[#F5C842]">{reportUsage.plan_name}</span> plan</>
                 ) : reportUsage.limit > 0 ? (
-                  <><FileText className="w-4 h-4 inline mr-1 text-[#F5C842]" /> <span className="text-[#F5C842] font-semibold">{reportUsage.remaining}</span> of {reportUsage.limit} free reports remaining this month</>
+                  <><FileText className="w-4 h-4 inline mr-1 text-[#F5C842]" /> <span className="text-[#F5C842] font-semibold">{reportUsage.remaining}</span> of {reportUsage.limit} tokens remaining this month</>
                 ) : (
-                  <><Wallet className="w-4 h-4 inline mr-1 text-zinc-400" /> Reports are charged from your wallet. <Link to="/plans" className="text-[#F5C842] hover:underline">Upgrade for free reports →</Link></>
+                  <><Wallet className="w-4 h-4 inline mr-1 text-zinc-400" /> Out of tokens. Reports will be charged from your wallet. <Link to="/plans" className="text-[#F5C842] hover:underline">Upgrade for tokens →</Link></>
                 )}
               </p>
             </div>
@@ -585,30 +573,24 @@ const ReportFlow = () => {
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {reportTypes.map((r) => {
-            const allowed = isReportAllowed(r.id);
             const effectivePrice = getEffectivePrice(r.price);
             return (
               <button
                 key={r.id}
                 onClick={() => pickType(r)}
-                className={`cosmic-card rounded-2xl p-5 text-left transition-all group ${
-                  allowed ? "hover:border-[#D4A017]/60" : "opacity-50 cursor-not-allowed"
-                }`}
+                className="cosmic-card rounded-2xl p-5 text-left transition-all group hover:border-[#D4A017]/60"
                 data-testid={`report-card-${r.id}`}
-                disabled={!allowed}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div
                     className="w-12 h-12 rounded-xl flex items-center justify-center"
                     style={{ background: `${r.color}1F`, border: `1px solid ${r.color}55` }}
                   >
-                    <r.Icon className="w-6 h-6" style={{ color: allowed ? r.color : "#666" }} />
+                    <r.Icon className="w-6 h-6" style={{ color: r.color }} />
                   </div>
-                  {!allowed ? (
-                    <Badge className="bg-red-500/15 text-red-400 border border-red-500/30 text-[10px]"><Lock className="w-3 h-3 mr-1" />Upgrade</Badge>
-                  ) : r.free || effectivePrice === 0 ? (
+                  {r.free || effectivePrice === 0 ? (
                     <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      {r.free ? "FREE" : "FREE ✦ Plan"}
+                      {r.free ? "FREE" : "1 Token"}
                     </Badge>
                   ) : (
                     <Badge className="bg-[#D4A017]/15 text-[#F5C842] border border-[#D4A017]/30">₹{r.price}</Badge>
@@ -616,15 +598,9 @@ const ReportFlow = () => {
                 </div>
                 <h3 className="font-cinzel font-semibold text-white text-lg mb-1">{r.name}</h3>
                 <p className="text-xs text-zinc-400 line-clamp-2">{r.desc}</p>
-                {allowed ? (
-                  <p className="mt-3 text-[#F5C842] text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-                    Generate Report →
-                  </p>
-                ) : (
-                  <p className="mt-3 text-red-400 text-xs font-semibold">
-                    Not available on your plan
-                  </p>
-                )}
+                <p className="mt-3 text-[#F5C842] text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                  Generate Report →
+                </p>
               </button>
             );
           })}

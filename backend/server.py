@@ -663,14 +663,8 @@ async def generate_ai_report(request: ReportRequest, current_user: Optional[dict
         # Fetch the user's plan details from DB
         plan_details = await get_user_plan_details(plan_slug)
 
-        # Check if this report type is allowed for the user's plan
-        allowed_types = plan_details.get("allowed_report_types", [])
-        if allowed_types and len(allowed_types) > 0:
-            if report_type not in allowed_types:
-                raise HTTPException(
-                    status_code=403,
-                    detail={"error": "REPORT_NOT_ALLOWED", "message": f"Your {plan_details.get('name', plan_slug)} plan does not include this report type. Please upgrade your plan."}
-                )
+        # Fetch the user's plan details from DB
+        plan_details = await get_user_plan_details(plan_slug)
 
         # Check plan-based free report allowance
         reports_limit = plan_details.get("ai_reports_per_month", 0)
@@ -764,7 +758,6 @@ async def get_report_usage(current_user: dict = Depends(require_auth)):
     plan_details = await get_user_plan_details(plan_slug)
     reports_limit = plan_details.get("ai_reports_per_month", 0)
     used_this_month = await count_user_reports_this_month(current_user["id"])
-    allowed_types = plan_details.get("allowed_report_types", [])
 
     if reports_limit == -1:
         remaining = -1  # unlimited
@@ -778,7 +771,6 @@ async def get_report_usage(current_user: dict = Depends(require_auth)):
         "used": used_this_month,
         "remaining": remaining,
         "unlimited": reports_limit == -1,
-        "allowed_report_types": allowed_types,
     }
 
 @api_router.get("/ai/reports")
