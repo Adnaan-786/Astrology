@@ -242,8 +242,8 @@ const AdminStore = () => {
                   )}
                 </div>
                 <CardContent className="p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0 flex-1">
                       <Badge variant="outline" className="text-xs border-slate-600 mb-2 capitalize">
                         {product.category}
                       </Badge>
@@ -251,7 +251,7 @@ const AdminStore = () => {
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 flex-shrink-0">
                           <MoreVertical className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
