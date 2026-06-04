@@ -65,9 +65,7 @@ const HomePage = () => {
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="max-w-2xl">
-            <Badge className="bg-[#D4A017]/15 dark:text-[#F5C842] text-[#8a6810] border-[#D4A017]/30 mb-6 px-4 py-1.5 font-inter">
-              <Sparkles className="w-3 h-3 mr-2" /> India's #1 AI-Powered Vedic Astrology Platform
-            </Badge>
+
             <h1 className="font-cinzel font-bold dark:text-white text-[#1a103f] mb-5 tracking-tight leading-[1.05]" style={{ fontSize: "clamp(2.25rem, 5vw, 4.5rem)" }}>
               Know Your Destiny.<br />
               <span className="text-gradient-gold">Transform Your Life.</span>

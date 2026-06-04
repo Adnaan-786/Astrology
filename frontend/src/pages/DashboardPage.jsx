@@ -203,16 +203,9 @@ const DashboardPage = () => {
     navigate("/login");
   };
 
-  const quickStats = [
-    { label: "Wallet Balance", value: `₹${user.walletBalance}`, icon: Wallet, color: "text-cosmic-gold" },
-    { label: "Login Streak", value: `${user.loginStreak} days`, icon: TrendingUp, color: "text-green-400" },
-    { label: "AI Reports", value: "3 left", icon: FileText, color: "text-cosmic-purple" },
-    { label: "Daily Rashifal", value: "Active", icon: Calendar, color: "text-blue-400" },
-  ];
-
-
   const [savedReports, setSavedReports] = useState([]);
-  
+  const [reportUsage, setReportUsage] = useState(null);
+
   useEffect(() => {
     const fetchReports = async () => {
       try {
@@ -222,8 +215,30 @@ const DashboardPage = () => {
         console.error("Failed to fetch reports", err);
       }
     };
-    fetchReports();
+    const fetchUsage = async () => {
+      try {
+        const { data } = await apiClient.get('/ai/report-usage');
+        setReportUsage(data);
+      } catch (err) {
+        console.error("Failed to fetch report usage", err);
+      }
+    };
+    if (localStorage.getItem("astrovedic_token")) {
+      fetchReports();
+      fetchUsage();
+    }
   }, []);
+
+  const aiReportsText = reportUsage
+    ? (reportUsage.unlimited ? "Unlimited" : `${reportUsage.remaining} left`)
+    : "Loading...";
+
+  const quickStats = [
+    { label: "Wallet Balance", value: `₹${user.walletBalance}`, icon: Wallet, color: "text-cosmic-gold" },
+    { label: "Login Streak", value: `${user.loginStreak || 0} days`, icon: TrendingUp, color: "text-green-400" },
+    { label: "AI Reports", value: aiReportsText, icon: FileText, color: "text-cosmic-purple" },
+    { label: "Daily Rashifal", value: "Active", icon: Calendar, color: "text-blue-400" },
+  ];
 
   const rechargeOptions = [99, 199, 299, 499, 999, 1499];
 
@@ -419,30 +434,6 @@ const DashboardPage = () => {
                 </Card>
               </TabsContent>
 
-            </Tabs>
-
-            {/* Referral Section */}
-            <Card className="cosmic-card border-cosmic-purple/30">
-              <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-cosmic-purple/20 flex items-center justify-center flex-shrink-0">
-                    <Gift className="w-6 h-6 text-cosmic-purple" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-cinzel font-semibold text-white mb-1">Refer & Earn ₹50</h3>
-                    <p className="text-zinc-400 text-sm mb-3">
-                      Invite friends and earn ₹50 for each successful referral!
-                    </p>
-                    <div className="flex gap-2">
-                      <div className="flex-1 px-3 py-2 bg-cosmic-surface rounded-lg text-sm text-zinc-300 font-mono">
-                        ASTRO-GUEST123
-                      </div>
-                      <Button size="sm" className="btn-gold">Copy</Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Sidebar */}
@@ -503,11 +494,11 @@ const DashboardPage = () => {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-semibold text-white text-sm">Login Streak</h4>
-                  <Badge className="bg-green-500/20 text-green-400">{user.loginStreak} days</Badge>
+                  <Badge className="bg-green-500/20 text-green-400">{user.loginStreak || 0} days</Badge>
                 </div>
-                <Progress value={(user.loginStreak / 30) * 100} className="h-2 mb-2" />
+                <Progress value={((user.loginStreak || 0) / 30) * 100} className="h-2 mb-2" />
                 <p className="text-xs text-zinc-400">
-                  {30 - user.loginStreak} days to unlock free report!
+                  {30 - (user.loginStreak || 0)} days to unlock free report!
                 </p>
               </CardContent>
             </Card>
