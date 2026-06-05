@@ -240,7 +240,7 @@ const DashboardPage = () => {
     { label: "Daily Rashifal", value: "Active", icon: Calendar, color: "text-blue-400" },
   ];
 
-  const rechargeOptions = [99, 199, 299, 499, 999, 1499];
+  const rechargeOptions = [5, 99, 199, 299, 499, 999, 1499];
 
   // Transaction History View
   if (showTransactions) {
