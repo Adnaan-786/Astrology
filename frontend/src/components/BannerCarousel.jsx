@@ -3,6 +3,7 @@ import axios from "axios";
 import { Link } from "react-router-dom";
 import { API } from "@/App";
 import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { getImageUrl } from "@/lib/utils";
 
 const DEFAULT_BANNER = {
   id: "default",
@@ -82,7 +83,7 @@ const BannerCarousel = ({ page = "home", showDefault = true }) => {
                 >
                   {b.image_url && (
                     <img
-                      src={b.image_url}
+                      src={getImageUrl(b.image_url)}
                       alt={b.title}
                       className="absolute inset-0 w-full h-full object-cover opacity-30"
                     />

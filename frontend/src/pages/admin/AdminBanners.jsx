@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { getImageUrl } from "@/lib/utils";
 
 const AdminBanners = () => {
   const [banners, setBanners] = useState([]);
@@ -129,7 +130,7 @@ const AdminBanners = () => {
                   <span className="text-sm font-mono">#{b.position}</span>
                 </div>
                 {b.image_url && (
-                  <img src={b.image_url} alt="" className="w-32 h-20 rounded-lg object-cover flex-shrink-0" />
+                  <img src={getImageUrl(b.image_url)} alt="" className="w-32 h-20 rounded-lg object-cover flex-shrink-0" />
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -185,7 +186,7 @@ const AdminBanners = () => {
                 </div>
               </div>
             </div>
-            {form.image_url && <img src={form.image_url} alt="Preview" className="w-full h-32 object-cover rounded-lg" />}
+            {form.image_url && <img src={getImageUrl(form.image_url)} alt="Preview" className="w-full h-32 object-cover rounded-lg" />}
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Link</label>

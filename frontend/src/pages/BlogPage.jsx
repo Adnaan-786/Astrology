@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { getImageUrl } from "@/lib/utils";
 
 const categories = ["All", "Kundli", "Vastu", "Numerology", "Gemstones", "Festivals", "Yoga", "Relationship", "Career"];
 
@@ -115,7 +116,7 @@ const BlogPage = () => {
                 <div className="grid md:grid-cols-2">
                   <div className="aspect-video md:aspect-auto overflow-hidden">
                     <img 
-                      src={featuredPost.cover_image} 
+                      src={getImageUrl(featuredPost.cover_image)} 
                       alt={featuredPost.title}
                       className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
                     />
@@ -156,7 +157,7 @@ const BlogPage = () => {
                     <CardContent className="p-0">
                       <div className="relative aspect-video overflow-hidden">
                         <img 
-                          src={post.cover_image} 
+                          src={getImageUrl(post.cover_image)} 
                           alt={post.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         />

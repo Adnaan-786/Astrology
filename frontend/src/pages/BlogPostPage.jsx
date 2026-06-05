@@ -4,6 +4,7 @@ import axios from "axios";
 import { API } from "@/App";
 import { Clock, Eye, ChevronLeft, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { getImageUrl } from "@/lib/utils";
 
 const BlogPostPage = () => {
   const { slug } = useParams();
@@ -82,7 +83,7 @@ const BlogPostPage = () => {
         {post.cover_image && (
           <div className="aspect-video w-full rounded-2xl overflow-hidden mb-12 border border-cosmic-purple/30 shadow-2xl">
             <img 
-              src={post.cover_image} 
+              src={getImageUrl(post.cover_image)} 
               alt={post.title}
               className="w-full h-full object-cover"
             />

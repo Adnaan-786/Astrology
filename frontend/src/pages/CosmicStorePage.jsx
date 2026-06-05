@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BannerCarousel from "@/components/BannerCarousel";
+import { getImageUrl } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -255,7 +256,7 @@ const CosmicStorePage = () => {
                 <CardContent className="p-0">
                   <div className="relative aspect-square overflow-hidden">
                     <img 
-                      src={product.images[0]} 
+                      src={getImageUrl(product.images[0])} 
                       alt={product.name}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                     />
@@ -341,7 +342,7 @@ const CosmicStorePage = () => {
                 <div className="grid md:grid-cols-2 gap-6 mt-4">
                   <div className="aspect-square rounded-xl overflow-hidden">
                     <img 
-                      src={selectedProduct.images[0]} 
+                      src={getImageUrl(selectedProduct.images[0])} 
                       alt={selectedProduct.name}
                       className="w-full h-full object-cover"
                     />
@@ -432,7 +433,7 @@ const CosmicStorePage = () => {
                     {cart.map(item => (
                       <div key={item.id} className="flex gap-3 p-3 glass rounded-lg" data-testid={`cart-item-${item.id}`}>
                         <img 
-                          src={item.images[0]} 
+                          src={getImageUrl(item.images[0])} 
                           alt={item.name}
                           className="w-16 h-16 rounded-lg object-cover"
                         />

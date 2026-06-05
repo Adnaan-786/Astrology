@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { getImageUrl } from "@/lib/utils";
 
 const categories = ["Kundli", "Gemstones", "Vastu", "Remedies", "Predictions", "Numerology", "General"];
 
@@ -146,7 +147,7 @@ const AdminBlog = () => {
             <CardContent className="p-4">
               <div className="flex items-start gap-4">
                 {post.cover_image && (
-                  <img src={post.cover_image} alt="" className="w-24 h-16 rounded-lg object-cover flex-shrink-0" />
+                  <img src={getImageUrl(post.cover_image)} alt="" className="w-24 h-16 rounded-lg object-cover flex-shrink-0" />
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">

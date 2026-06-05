@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getImageUrl } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -190,8 +191,7 @@ const AdminStore = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Upload failed");
-      const fullUrl = `${backendUrl}${data.url}`;
-      setFormData(p => ({ ...p, images: [...p.images.filter(u => u.trim() !== ""), fullUrl] }));
+      setFormData(p => ({ ...p, images: [...p.images.filter(u => u.trim() !== ""), data.url] }));
       toast.success("Image uploaded successfully!");
     } catch (err) {
       toast.error(err.message || "Image upload failed");
@@ -267,7 +267,7 @@ const AdminStore = () => {
               <Card key={product.id} className="bg-slate-800/50 border-slate-700 overflow-hidden" data-testid={`product-card-${product.id}`}>
                 <div className="relative aspect-square">
                   <img 
-                    src={product.images?.[0] || "https://via.placeholder.com/300"} 
+                    src={product.images?.[0] ? getImageUrl(product.images[0]) : "https://via.placeholder.com/300"} 
                     alt={product.name}
                     className="w-full h-full object-cover"
                     onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.classList.add('flex', 'items-center', 'justify-center', 'bg-slate-700'); e.target.insertAdjacentHTML('afterend', '<span class="text-slate-500 text-xs text-center px-2">No Image</span>'); }}
@@ -475,8 +475,8 @@ const AdminStore = () => {
               {formData.images.filter(u => u.trim() !== "").length > 0 && (
                 <div className="flex flex-wrap gap-3 mb-4">
                   {formData.images.filter(u => u.trim() !== "").map((img, idx) => (
-                    <div key={idx} className="relative group w-20 h-20 rounded-lg overflow-hidden border border-slate-600 bg-slate-800">
-                      <img src={img} alt={`preview ${idx}`} className="w-full h-full object-cover" />
+                    <div key={idx} className="relative aspect-square w-20 rounded-lg overflow-hidden border border-slate-700">
+                      <img src={getImageUrl(img)} alt={`preview ${idx}`} className="w-full h-full object-cover" />
                       <button
                         type="button"
                         onClick={() => removeImage(formData.images.indexOf(img))}
