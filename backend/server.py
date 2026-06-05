@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Query, Depends, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Query, Depends, Request, UploadFile, File
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -15,6 +16,7 @@ import time
 import json as json_module
 import re as re_module
 import asyncio
+import shutil
 import httpx
 from passlib.context import CryptContext
 from jose import JWTError, jwt as jose_jwt
@@ -74,6 +76,11 @@ def check_rate_limit(key: str) -> bool:
 
 app = FastAPI(title="AstroVedic AI API")
 api_router = APIRouter(prefix="/api")
+
+# ==================== STATIC FILE SERVING FOR UPLOADS ====================
+UPLOADS_DIR = ROOT_DIR / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 # ==================== AUTH HELPERS ====================
 
@@ -1614,6 +1621,26 @@ async def delete_product(product_id: str, _admin: dict = Depends(require_admin))
     await db.products.delete_one({"id": product_id})
     await log_audit("delete", "product", product_id)
     return {"success": True}
+
+# --- Admin Image Upload ---
+@api_router.post("/admin/upload")
+async def upload_image(file: UploadFile = File(...), _admin: dict = Depends(require_admin)):
+    """Upload an image file and return its public URL."""
+    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"File type {file.content_type} not allowed. Use JPEG, PNG, WebP, GIF, or SVG.")
+    # 5 MB limit
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum 5 MB.")
+    ext = Path(file.filename).suffix.lower() or ".jpg"
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    file_path = UPLOADS_DIR / unique_name
+    with open(file_path, "wb") as f:
+        f.write(contents)
+    url = f"/uploads/{unique_name}"
+    await log_audit("upload", "image", unique_name, file.filename)
+    return {"success": True, "url": url, "filename": unique_name}
 
 # --- Admin Orders ---
 @api_router.get("/admin/orders")

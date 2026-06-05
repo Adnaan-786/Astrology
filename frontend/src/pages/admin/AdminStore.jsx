@@ -4,7 +4,7 @@ import { API } from "@/App";
 import { toast } from "sonner";
 import {
   ShoppingBag, Plus, Search, MoreVertical, Edit, Trash2,
-  Eye, Upload, Package
+  Eye, Upload, Package, ImagePlus, X as XIcon, Link as LinkIcon, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +43,7 @@ const AdminStore = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [uploading, setUploading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -160,6 +161,46 @@ const AdminStore = () => {
     setFormData(p => ({ ...p, images: newImages }));
   };
 
+  const removeImage = (index) => {
+    setFormData(p => ({ ...p, images: p.images.filter((_, i) => i !== index) }));
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Only JPEG, PNG, WebP, GIF, or SVG images are allowed.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File too large. Maximum 5 MB.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const token = localStorage.getItem("astrovedic_token");
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:8001";
+      const res = await fetch(`${backendUrl}/api/admin/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Upload failed");
+      const fullUrl = `${backendUrl}${data.url}`;
+      setFormData(p => ({ ...p, images: [...p.images.filter(u => u.trim() !== ""), fullUrl] }));
+      toast.success("Image uploaded successfully!");
+    } catch (err) {
+      toast.error(err.message || "Image upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
   const filteredProducts = products.filter(p => {
     if (selectedCategory !== "all" && p.category !== selectedCategory) return false;
     if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -229,6 +270,7 @@ const AdminStore = () => {
                     src={product.images?.[0] || "https://via.placeholder.com/300"} 
                     alt={product.name}
                     className="w-full h-full object-cover"
+                    onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.classList.add('flex', 'items-center', 'justify-center', 'bg-slate-700'); e.target.insertAdjacentHTML('afterend', '<span class="text-slate-500 text-xs text-center px-2">No Image</span>'); }}
                   />
                   {product.discounted_price && (
                     <Badge className="absolute top-2 left-2 bg-red-500">
@@ -427,19 +469,85 @@ const AdminStore = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Image URLs</label>
-              {formData.images.map((img, idx) => (
-                <Input
-                  key={idx}
-                  value={img}
-                  onChange={(e) => updateImage(idx, e.target.value)}
-                  className="bg-slate-800 border-slate-700 mb-2"
-                  placeholder="https://..."
-                />
-              ))}
-              <Button type="button" variant="outline" size="sm" onClick={addImageField} className="border-slate-700">
-                <Plus className="w-4 h-4 mr-2" /> Add Image
-              </Button>
+              <label className="block text-sm font-medium text-slate-300 mb-3">Product Images</label>
+
+              {/* Image Previews */}
+              {formData.images.filter(u => u.trim() !== "").length > 0 && (
+                <div className="flex flex-wrap gap-3 mb-4">
+                  {formData.images.filter(u => u.trim() !== "").map((img, idx) => (
+                    <div key={idx} className="relative group w-20 h-20 rounded-lg overflow-hidden border border-slate-600 bg-slate-800">
+                      <img src={img} alt={`preview ${idx}`} className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(formData.images.indexOf(img))}
+                        className="absolute top-0.5 right-0.5 bg-red-500 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <XIcon className="w-3 h-3 text-white" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Upload & URL Options */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                {/* Upload Button */}
+                <label className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${
+                  uploading ? 'border-purple-500 bg-purple-500/10' : 'border-slate-600 hover:border-purple-500 hover:bg-purple-500/5'
+                }`}>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                    disabled={uploading}
+                  />
+                  {uploading ? (
+                    <><Loader2 className="w-4 h-4 text-purple-400 animate-spin" /><span className="text-sm text-purple-400">Uploading...</span></>
+                  ) : (
+                    <><Upload className="w-4 h-4 text-slate-400" /><span className="text-sm text-slate-400">Upload Photo</span></>
+                  )}
+                </label>
+
+                {/* URL Input */}
+                <div className="flex gap-2 flex-1">
+                  <div className="relative flex-1">
+                    <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <Input
+                      id="url-input"
+                      placeholder="Or paste image URL..."
+                      className="pl-10 bg-slate-800 border-slate-700"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const val = e.target.value.trim();
+                          if (val) {
+                            setFormData(p => ({ ...p, images: [...p.images.filter(u => u.trim() !== ""), val] }));
+                            e.target.value = "";
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-slate-700 px-3"
+                    onClick={() => {
+                      const input = document.getElementById("url-input");
+                      const val = input?.value?.trim();
+                      if (val) {
+                        setFormData(p => ({ ...p, images: [...p.images.filter(u => u.trim() !== ""), val] }));
+                        input.value = "";
+                      }
+                    }}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 mt-2">Upload from your device or paste a URL. Max 5 MB per image.</p>
             </div>
 
             <div className="flex items-center gap-6">
