@@ -21,7 +21,7 @@ const AdminPlans = () => {
     name: "", slug: "", description: "", price_monthly: 0, price_annual: 0,
     features: [""], ai_reports_per_month: 0, free_chat_minutes: 0,
     discount_on_products: 0, is_active: true, is_featured: false, color: "#8B5CF6",
-    ai_chat_limit_period: "day",
+    ai_chat_messages_limit: 5, ai_chat_limit_period: "day",
   });
 
   useEffect(() => { fetchPlans(); fetchReportTypes(); }, []);
@@ -42,7 +42,7 @@ const AdminPlans = () => {
   };
 
   const resetForm = () => {
-    setForm({ name: "", slug: "", description: "", price_monthly: 0, price_annual: 0, features: [""], ai_reports_per_month: 0, free_chat_minutes: 0, discount_on_products: 0, is_active: true, is_featured: false, color: "#8B5CF6" });
+    setForm({ name: "", slug: "", description: "", price_monthly: 0, price_annual: 0, features: [""], ai_reports_per_month: 0, free_chat_minutes: 0, discount_on_products: 0, is_active: true, is_featured: false, color: "#8B5CF6", ai_chat_messages_limit: 5, ai_chat_limit_period: "day" });
     setEditing(null);
   };
 
@@ -53,6 +53,8 @@ const AdminPlans = () => {
       features: plan.features?.length ? plan.features : [""],
       ai_reports_per_month: plan.ai_reports_per_month, free_chat_minutes: plan.free_chat_minutes,
       discount_on_products: plan.discount_on_products,
+      ai_chat_messages_limit: plan.ai_chat_messages_limit !== undefined ? plan.ai_chat_messages_limit : 5,
+      ai_chat_limit_period: plan.ai_chat_limit_period || "day",
       is_active: plan.is_active !== undefined ? plan.is_active : true,
       is_featured: plan.is_featured,
       color: plan.color || "#8B5CF6"
@@ -188,7 +190,23 @@ const AdminPlans = () => {
                 <Input type="number" value={form.ai_reports_per_month} onChange={(e) => setForm(p => ({ ...p, ai_reports_per_month: parseInt(e.target.value) || 0 }))} className="bg-slate-800 border-slate-700" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Free Chat Min</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">AI Chat Limit (-1 for unlimited)</label>
+                <Input type="number" value={form.ai_chat_messages_limit} onChange={(e) => setForm(p => ({ ...p, ai_chat_messages_limit: parseInt(e.target.value) || 0 }))} className="bg-slate-800 border-slate-700" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Chat Limit Period</label>
+                <Select value={form.ai_chat_limit_period} onValueChange={(v) => setForm(p => ({ ...p, ai_chat_limit_period: v }))}>
+                  <SelectTrigger className="bg-slate-800 border-slate-700"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-slate-700">
+                    <SelectItem value="day">Per Day</SelectItem>
+                    <SelectItem value="month">Per Month</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Free Call/Chat Min</label>
                 <Input type="number" value={form.free_chat_minutes} onChange={(e) => setForm(p => ({ ...p, free_chat_minutes: parseInt(e.target.value) || 0 }))} className="bg-slate-800 border-slate-700" />
               </div>
               <div>
