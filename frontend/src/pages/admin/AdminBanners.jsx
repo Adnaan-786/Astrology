@@ -16,6 +16,7 @@ import {
 const AdminBanners = () => {
   const [banners, setBanners] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({
@@ -58,6 +59,36 @@ const AdminBanners = () => {
       }
       setShowForm(false); resetForm(); fetchBanners();
     } catch (e) { toast.error("Failed to save"); }
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Only JPEG, PNG, WebP, GIF, or SVG images are allowed.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const token = localStorage.getItem("astrovedic_token");
+      const res = await fetch(`${API}/admin/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Upload failed");
+      setForm(p => ({ ...p, image_url: data.url }));
+      toast.success("Image uploaded successfully!");
+    } catch (err) {
+      toast.error(err.message || "Image upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
   };
 
   const toggleBanner = async (b) => {
@@ -138,7 +169,21 @@ const AdminBanners = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">Image URL *</label>
-              <Input value={form.image_url} onChange={(e) => setForm(p => ({ ...p, image_url: e.target.value }))} className="bg-slate-800 border-slate-700" required placeholder="https://..." />
+              <div className="flex gap-2">
+                <Input value={form.image_url} onChange={(e) => setForm(p => ({ ...p, image_url: e.target.value }))} className="bg-slate-800 border-slate-700 flex-1" required placeholder="https://..." />
+                <div className="relative">
+                  <Button type="button" variant="outline" className="border-slate-700 w-[100px]" disabled={uploading}>
+                    {uploading ? "Uploading..." : "Upload"}
+                  </Button>
+                  <input 
+                    type="file" 
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    disabled={uploading}
+                  />
+                </div>
+              </div>
             </div>
             {form.image_url && <img src={form.image_url} alt="Preview" className="w-full h-32 object-cover rounded-lg" />}
             <div className="grid grid-cols-3 gap-4">
