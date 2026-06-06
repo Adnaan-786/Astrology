@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import apiClient from "@/lib/apiClient";
 import { useApp } from "@/App";
 import { useSupport } from "@/components/SupportContext";
 import {
@@ -18,7 +19,7 @@ const OFFERINGS = [
   { icon: Sun,          title: "Daily Rashifal",     desc: "Read your daily horoscope free in Hindi & English.", link: "/rashifal",      cta: "Read Now",      color: "from-[#F59E0B] to-[#B45309]", ring: "#F59E0B" },
 ];
 
-const REPORT_TIERS = [
+const FALLBACK_REPORT_TIERS = [
   {
     name: "Basic Report",   price: 0,   id: "kundli-basic",
     features: ["Kundli Overview", "Basic Predictions", "Online View"],
@@ -51,6 +52,38 @@ const HomePage = () => {
   const { stats } = useApp();
   const { openSupport } = useSupport();
   const [openFaq, setOpenFaq] = useState(0);
+  const [reportTiers, setReportTiers] = useState(FALLBACK_REPORT_TIERS);
+
+  useEffect(() => {
+    let mounted = true;
+    apiClient.get(`/report-types`)
+      .then((res) => {
+        if (!mounted || !Array.isArray(res.data) || res.data.length === 0) return;
+        
+        const newTiers = FALLBACK_REPORT_TIERS.map((fallback, idx) => {
+          // try to match by slug first
+          const matched = res.data.find(r => r.slug === fallback.id);
+          if (matched) {
+            return { ...fallback, name: matched.name, price: Number(matched.price) || 0 };
+          }
+          // if not found by slug, take the item at this index if exists
+          const itemAtIndex = res.data[idx];
+          if (itemAtIndex) {
+            return { 
+              ...fallback, 
+              id: itemAtIndex.slug, 
+              name: itemAtIndex.name, 
+              price: Number(itemAtIndex.price) || 0 
+            };
+          }
+          return fallback;
+        });
+        
+        setReportTiers(newTiers);
+      })
+      .catch(() => { /* keep fallback */ });
+    return () => { mounted = false; };
+  }, []);
 
   return (
     <div className="min-h-screen pb-20 lg:pb-0 av-bg" data-testid="homepage">
@@ -163,7 +196,7 @@ const HomePage = () => {
 
             {/* Pricing cards */}
             <div className="grid sm:grid-cols-3 gap-4">
-              {REPORT_TIERS.map((t, idx) => (
+              {reportTiers.map((t, idx) => (
                 <div
                   key={t.id}
                   className={`relative rounded-2xl p-6 flex flex-col bg-gradient-to-br ${t.bg} border ${t.border} ${
