@@ -9,7 +9,7 @@ import {
   Download, Share2, ArrowLeft, Wallet, CalendarDays, Clock,
   MapPin, User, Users, Crown, Scroll, Gem, FileDown, Heart,
   Briefcase, HeartPulse, Home as HomeIcon, Baby, Orbit, Calendar,
-  PieChart,
+  PieChart, Mail
 } from "lucide-react";
 import { RashiIcon } from "@/components/ZodiacIcons";
 import { Button } from "@/components/ui/button";
@@ -394,6 +394,7 @@ const ReportFlow = () => {
   const [form, setForm] = useState({
     birthName: "", dob: "", tob: "", pob: "",
     partnerName: "", partnerDob: "",
+    email: "", // Email for guest checkout receipt
   });
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
   const [reportText, setReportText] = useState("");
@@ -434,9 +435,91 @@ const ReportFlow = () => {
       toast.error("Please fill partner details");
       return;
     }
+
+    const effectivePrice = getEffectivePrice(selectedType.price);
+    const isGuestPaid = !isLoggedIn() && effectivePrice > 0;
+
+    if (isGuestPaid && !form.email) {
+      toast.error("Please enter your email for the receipt");
+      return;
+    }
+
+    // Guest Paid Flow via Razorpay
+    if (isGuestPaid) {
+      try {
+        setStep(3); // Show loading
+        // 1. Create Guest Order
+        const { data: orderData } = await apiClient.post(`/guest/report/create-order`, {
+          reportType: selectedType.id,
+          email: form.email,
+        });
+
+        // Open Razorpay
+        const options = {
+          key: "rzp_live_SxaIbfgFZqYfom", // Or inject via env
+          amount: orderData.amount,
+          currency: orderData.currency,
+          name: "AstroVedic AI",
+          description: `AI Report: ${selectedType.name}`,
+          order_id: orderData.order_id,
+          handler: async function (response) {
+            try {
+              setStep(3); // ensure loading is shown
+              // 2. Verify and Generate
+              const { data: reportData } = await apiClient.post(`/guest/report/verify-and-generate`, {
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature,
+                generation_token: orderData.generation_token,
+                reportType: selectedType.id,
+                birthName: form.birthName,
+                dob: form.dob,
+                tob: form.tob,
+                pob: form.pob,
+                partnerName: form.partnerName,
+                partnerDob: form.partnerDob,
+                email: form.email
+              }, { timeout: 120000 });
+              
+              setReportText(reportData.report);
+              setReportMeta({ type: selectedType.name, price: effectivePrice, isPlanFree: false, at: new Date().toISOString() });
+              setStep(4);
+              toast.success("Payment successful! Report generated ✓");
+            } catch (err) {
+              const detail = err?.response?.data?.detail;
+              toast.error(typeof detail === "string" ? detail : "Report generation failed after payment. Please contact support.");
+              setStep(2);
+            }
+          },
+          prefill: {
+            name: form.birthName,
+            email: form.email,
+          },
+          theme: { color: "#8B5CF6" },
+          modal: {
+            ondismiss: function() {
+              toast.error("Payment cancelled");
+              setStep(2);
+            }
+          }
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', function (response){
+          toast.error("Payment failed: " + response.error.description);
+          setStep(2);
+        });
+        rzp.open();
+      } catch (err) {
+        toast.error(err?.response?.data?.detail || "Failed to initiate payment");
+        setStep(2);
+      }
+      return;
+    }
+
+    // Existing Logged-in or Guest Free Flow
     setStep(3);
     try {
-      const user = getUser() || {};
       const res = await apiClient.post(`/ai/report`, {
         reportType: selectedType.id,
         birthName: form.birthName,
@@ -670,19 +753,31 @@ const ReportFlow = () => {
                   <label className="text-sm text-zinc-300 mb-1.5 block">Partner's Full Name *</label>
                   <Input data-testid="report-form-partner-name" value={form.partnerName}
                     onChange={(e) => setForm((p) => ({ ...p, partnerName: e.target.value }))}
-                    className="bg-[#231F3A] border-[#2D1B69] text-white" required />
+                    className="bg-[#231F3A] border-[#2D1B69] text-white" required={selectedType.needsPartner} />
                 </div>
                 <div>
                   <label className="text-sm text-zinc-300 mb-1.5 block">Partner's Date of Birth *</label>
                   <Input type="date" data-testid="report-form-partner-dob" value={form.partnerDob}
                     onChange={(e) => setForm((p) => ({ ...p, partnerDob: e.target.value }))}
+                    className="bg-[#231F3A] border-[#2D1B69] text-white" required={selectedType.needsPartner} />
+                </div>
+              </div>
+            )}
+
+            {!isLoggedIn() && getEffectivePrice(selectedType.price) > 0 && (
+              <div className="pt-3 mt-3 border-t border-[#2D1B69] space-y-4">
+                <p className="text-sm text-[#F5C842] font-medium flex items-center gap-2"><Mail className="w-4 h-4" /> Contact Information</p>
+                <div>
+                  <label className="text-sm text-zinc-300 mb-1.5 block">Email Address (for receipt) *</label>
+                  <Input type="email" placeholder="you@example.com" data-testid="report-form-email" value={form.email}
+                    onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
                     className="bg-[#231F3A] border-[#2D1B69] text-white" required />
                 </div>
               </div>
             )}
 
             <Button type="submit" className="btn-gold w-full py-6 text-base rounded-full" data-testid="report-generate-btn">
-              <Sparkles className="w-5 h-5 mr-2" /> Generate Report {getEffectivePrice(selectedType.price) > 0 && `• ₹${selectedType.price}`}
+              <Sparkles className="w-5 h-5 mr-2" /> {!isLoggedIn() && getEffectivePrice(selectedType.price) > 0 ? "Pay" : "Generate Report"} {getEffectivePrice(selectedType.price) > 0 && `• ₹${selectedType.price}`}
             </Button>
           </form>
         </div>

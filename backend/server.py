@@ -24,9 +24,18 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import razorpay
 import smtplib
 from email.message import EmailMessage
-
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# Configure Cloudinary globally
+cloudinary.config(
+    cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME", "Root"),
+    api_key=os.environ.get("CLOUDINARY_API_KEY"),
+    api_secret=os.environ.get("CLOUDINARY_API_SECRET")
+)
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -915,6 +924,201 @@ async def get_single_report(report_id: str, current_user: dict = Depends(require
         raise HTTPException(status_code=404, detail="Report not found")
     return report
 
+# ==================== GUEST REPORT CHECKOUT ====================
+
+class GuestReportOrderRequest(BaseModel):
+    reportType: str
+    email: str
+
+@api_router.post("/guest/report/create-order")
+async def create_guest_report_order(request: GuestReportOrderRequest):
+    report_type = request.reportType
+    base_price = await get_report_type_price(report_type)
+    if base_price <= 0:
+        raise HTTPException(status_code=400, detail="Cannot create order for free/invalid report")
+
+    amount_in_paise = int(base_price * 100)
+    generation_token = str(uuid.uuid4())
+    
+    data = {
+        "amount": amount_in_paise,
+        "currency": "INR",
+        "receipt": f"guest_report_{int(datetime.now(timezone.utc).timestamp())}",
+        "notes": {
+            "report_type": report_type,
+            "email": request.email,
+            "generation_token": generation_token
+        }
+    }
+    
+    try:
+        rzp_order = razorpay_client.order.create(data=data)
+        
+        # Save guest order in DB
+        order_doc = {
+            "id": rzp_order["id"],
+            "report_type": report_type,
+            "email": request.email,
+            "amount": base_price,
+            "status": "pending",
+            "generation_token": generation_token,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.guest_report_orders.insert_one(order_doc)
+        
+        return {
+            "order_id": rzp_order["id"],
+            "amount": rzp_order["amount"],
+            "currency": rzp_order["currency"],
+            "generation_token": generation_token
+        }
+    except Exception as e:
+        logging.error(f"Razorpay guest report order creation failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create payment order")
+
+class VerifyGuestReportRequest(BaseModel):
+    razorpay_payment_id: str
+    razorpay_order_id: str
+    razorpay_signature: str
+    generation_token: str
+    reportType: str
+    birthName: str
+    dob: str
+    tob: Optional[str] = ""
+    pob: str
+    partnerName: Optional[str] = ""
+    partnerDob: Optional[str] = ""
+    email: str
+
+@api_router.post("/guest/report/verify-and-generate")
+async def verify_and_generate_guest_report(request: VerifyGuestReportRequest):
+    # 1. Verify Razorpay signature
+    try:
+        razorpay_client.utility.verify_payment_signature({
+            'razorpay_order_id': request.razorpay_order_id,
+            'razorpay_payment_id': request.razorpay_payment_id,
+            'razorpay_signature': request.razorpay_signature
+        })
+    except razorpay.errors.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid payment signature")
+    except Exception as e:
+        logging.error(f"Razorpay payment verification failed: {e}")
+        raise HTTPException(status_code=500, detail="Payment verification failed")
+        
+    # 2. Check guest order
+    order = await db.guest_report_orders.find_one({
+        "id": request.razorpay_order_id,
+        "generation_token": request.generation_token
+    })
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found or invalid token")
+        
+    if order["status"] != "pending":
+        raise HTTPException(status_code=400, detail="This order has already been processed. Please initiate a new payment if it failed previously.")
+        
+    # 3. Mark as paid (burns the token if generation fails)
+    await db.guest_report_orders.update_one(
+        {"id": request.razorpay_order_id},
+        {"$set": {"status": "paid", "razorpay_payment_id": request.razorpay_payment_id}}
+    )
+    
+    # 4. Generate AI Report
+    user_prompt = _build_report_prompt(request.reportType, request.model_dump())
+    
+    try:
+        report_messages = [
+            {"role": "system", "content": REPORT_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+        # Guest gets default model (llama) since they have no plan
+        report_text = await call_openrouter(report_messages, model=OPENROUTER_GROQ_MODEL, api_key=OPENROUTER_API_KEY_GROQ, max_tokens=4000)
+    except Exception as e:
+        logging.error(f"Guest AI Report generation error: {e}")
+        # Mark as failed. User must pay again.
+        await db.guest_report_orders.update_one(
+            {"id": request.razorpay_order_id},
+            {"$set": {"status": "failed_generation", "error": str(e)}}
+        )
+        raise HTTPException(status_code=500, detail="Report generation failed. Since the payment was consumed, please initiate a new payment.")
+        
+    # 5. Save report to DB
+    report_doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": "guest",
+        "guest_email": request.email,
+        "generation_token": request.generation_token,
+        "user_name": request.birthName,
+        "report_type": request.reportType,
+        "birth_data": {
+            "dob": request.dob, "tob": request.tob, "pob": request.pob,
+            "partner_name": request.partnerName, "partner_dob": request.partnerDob,
+        },
+        "content": report_text,
+        "price_paid": order["amount"],
+        "is_plan_free": False,
+        "status": "completed",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.ai_reports.insert_one(report_doc)
+    
+    # Mark order as completed
+    await db.guest_report_orders.update_one(
+        {"id": request.razorpay_order_id},
+        {"$set": {"status": "completed"}}
+    )
+    
+    # Attempt to send email asynchronously
+    asyncio.create_task(send_guest_report_email(request.email, request.birthName, request.reportType, report_text))
+    
+    return {
+        "report": report_text,
+        "reportType": request.reportType,
+        "reportId": report_doc["id"],
+        "generation_token": request.generation_token
+    }
+
+@api_router.get("/guest/report/{report_id}")
+async def get_guest_report(report_id: str, generation_token: str):
+    report = await db.ai_reports.find_one({
+        "id": report_id,
+        "generation_token": generation_token,
+        "user_id": "guest"
+    }, {"_id": 0})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found or invalid token")
+    return report
+
+async def send_guest_report_email(email: str, name: str, report_type: str, content: str):
+    smtp_user = os.environ.get("SMTP_USER")
+    smtp_pass = os.environ.get("SMTP_PASS")
+    
+    if not smtp_user or not smtp_pass:
+        logging.warning("SMTP_USER or SMTP_PASS not set. Skipping guest report email.")
+        return
+        
+    try:
+        msg = EmailMessage()
+        msg['Subject'] = f"Your AstroVedic {report_type.replace('-', ' ').title()} Report"
+        msg['From'] = smtp_user
+        msg['To'] = email
+        
+        body = f"Hello {name},\n\nThank you for generating your {report_type.replace('-', ' ').title()} with AstroVedic AI.\n\n"
+        body += "You can find your report content below. We recommend downloading it as a PDF from the website before closing your browser.\n\n"
+        body += "-" * 50 + "\n\n"
+        body += content
+        
+        msg.set_content(body)
+        
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+        server.quit()
+        logging.info(f"Guest report emailed to {email}")
+    except Exception as e:
+        logging.error(f"Failed to send guest report email to {email}: {e}")
+
+
 @api_router.get("/wallet/my-transactions")
 async def get_user_transactions(current_user: dict = Depends(require_auth)):
     """Return the current user's wallet transactions."""
@@ -1625,7 +1829,7 @@ async def delete_product(product_id: str, _admin: dict = Depends(require_admin))
 # --- Admin Image Upload ---
 @api_router.post("/admin/upload")
 async def upload_image(file: UploadFile = File(...), _admin: dict = Depends(require_admin)):
-    """Upload an image file and return its public URL."""
+    """Upload an image file to Cloudinary and return its public URL."""
     allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"]
     if file.content_type not in allowed_types:
         raise HTTPException(status_code=400, detail=f"File type {file.content_type} not allowed. Use JPEG, PNG, WebP, GIF, or SVG.")
@@ -1633,14 +1837,27 @@ async def upload_image(file: UploadFile = File(...), _admin: dict = Depends(requ
     contents = await file.read()
     if len(contents) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large. Maximum 5 MB.")
-    ext = Path(file.filename).suffix.lower() or ".jpg"
-    unique_name = f"{uuid.uuid4().hex}{ext}"
-    file_path = UPLOADS_DIR / unique_name
-    with open(file_path, "wb") as f:
-        f.write(contents)
-    url = f"/uploads/{unique_name}"
-    await log_audit("upload", "image", unique_name, file.filename)
-    return {"success": True, "url": url, "filename": unique_name}
+    
+    try:
+        # Upload directly to Cloudinary
+        ext = Path(file.filename).suffix.lower() or ".jpg"
+        unique_name = f"{uuid.uuid4().hex}"
+        
+        result = cloudinary.uploader.upload(
+            contents,
+            folder="astrovedic/products",
+            public_id=unique_name,
+            resource_type="image"
+        )
+        url = result.get("secure_url")
+        if not url:
+            raise Exception("No secure_url returned from Cloudinary")
+            
+        await log_audit("upload", "image", unique_name, file.filename)
+        return {"success": True, "url": url, "filename": unique_name + ext}
+    except Exception as e:
+        print(f"Cloudinary upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Image upload failed: {str(e)}")
 
 # --- Admin Orders ---
 @api_router.get("/admin/orders")
