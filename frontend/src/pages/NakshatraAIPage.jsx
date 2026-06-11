@@ -227,6 +227,7 @@ const AIChat = () => {
   const user = getUser() || {};
 
   const fetchChatUsage = async () => {
+    if (!isLoggedIn()) return;
     try {
       const res = await apiClient.get("/ai/chat-usage");
       setChatUsage(res.data);

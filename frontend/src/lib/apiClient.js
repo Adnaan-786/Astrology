@@ -31,7 +31,7 @@ apiClient.interceptors.response.use(
       localStorage.removeItem('astrovedic_token');
       localStorage.removeItem('astrovedic_user');
       // Only redirect if not already on login/signup/public pages
-      const publicPaths = ['/login', '/signup', '/', '/astrologers', '/rashifal', '/cosmic-store', '/plans', '/blog'];
+      const publicPaths = ['/login', '/signup', '/', '/nakshatra-ai', '/astrologers', '/rashifal', '/cosmic-store', '/plans', '/blog'];
       const currentPath = window.location.pathname;
       if (!publicPaths.some(p => currentPath === p || currentPath.startsWith(p + '/'))) {
         window.location.href = '/login';
