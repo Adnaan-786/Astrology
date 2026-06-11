@@ -10,9 +10,6 @@ export function getImageUrl(url) {
   if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
     return url;
   }
-  if (url.startsWith("/uploads") || !url.startsWith("http")) {
-    return url.startsWith("/") ? url : `/${url}`;
-  }
   const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:8001";
   return `${backendUrl}${url.startsWith("/") ? "" : "/"}${url}`;
 }
