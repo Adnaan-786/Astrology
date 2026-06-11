@@ -1843,8 +1843,11 @@ async def upload_image(file: UploadFile = File(...), _admin: dict = Depends(requ
         ext = Path(file.filename).suffix.lower() or ".jpg"
         unique_name = f"{uuid.uuid4().hex}"
         
+        # Reset file pointer since we read it for size check
+        file.file.seek(0)
+        
         result = cloudinary.uploader.upload(
-            contents,
+            file.file,
             folder="astrovedic/products",
             public_id=unique_name,
             resource_type="image"
